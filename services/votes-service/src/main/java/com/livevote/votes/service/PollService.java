@@ -9,6 +9,9 @@ import com.livevote.votes.entity.PollEntity;
 import com.livevote.votes.entity.PollOptionEntity;
 import com.livevote.votes.entity.PollStatus;
 import com.livevote.votes.entity.VoteEntity;
+import com.livevote.votes.event.PollCreatedEvent;
+import com.livevote.votes.event.PollCreatedOptionEvent;
+import com.livevote.votes.event.VoteCastEvent;
 import com.livevote.votes.exception.ConflictException;
 import com.livevote.votes.exception.ForbiddenException;
 import com.livevote.votes.exception.ResourceNotFoundException;
@@ -22,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,18 +36,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PollService {
 
+    private static final int EVENT_VERSION = 1;
+
     private final PollRepository pollRepository;
     private final PollOptionRepository pollOptionRepository;
     private final VoteRepository voteRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PollService(
             PollRepository pollRepository,
             PollOptionRepository pollOptionRepository,
-            VoteRepository voteRepository
+            VoteRepository voteRepository,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.pollRepository = pollRepository;
         this.pollOptionRepository = pollOptionRepository;
         this.voteRepository = voteRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -56,6 +65,18 @@ public class PollService {
             optionsToSave.add(new PollOptionEntity(savedPoll.getId(), request.options().get(i).trim(), i));
         }
         List<PollOptionEntity> savedOptions = pollOptionRepository.saveAll(optionsToSave);
+
+        List<PollCreatedOptionEvent> optionEvents = savedOptions.stream()
+                .map(option -> new PollCreatedOptionEvent(option.getId(), option.getText()))
+                .toList();
+        eventPublisher.publishEvent(new PollCreatedEvent(
+                EVENT_VERSION,
+                savedPoll.getId(),
+                savedPoll.getTitle(),
+                optionEvents,
+                savedPoll.getCreatedAt()
+        ));
+
         return toPollResponse(savedPoll, savedOptions);
     }
 
@@ -116,6 +137,13 @@ public class PollService {
         VoteEntity vote = new VoteEntity(pollId, request.optionId(), request.deviceId().trim(), Instant.now());
         try {
             VoteEntity savedVote = voteRepository.saveAndFlush(vote);
+            eventPublisher.publishEvent(new VoteCastEvent(
+                    EVENT_VERSION,
+                    savedVote.getId(),
+                    savedVote.getPollId(),
+                    savedVote.getOptionId(),
+                    savedVote.getCastAt()
+            ));
             return new VoteResponse(
                     savedVote.getId(),
                     savedVote.getPollId(),

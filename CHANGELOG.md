@@ -4,6 +4,19 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
+### Cambiado
+- Estandarización obligatoria a **Package by Layer** en todos los microservicios Spring Boot (`config`, `security`, `controller`, `service`, `repository`, `entity`, `dto`, `event`, `exception`) sin paquete genérico `common`.
+
+### Agregado
+- **F2 (RabbitMQ + `results-service` + `postgres-results`)**:
+  - Topología durable en RabbitMQ (`livevote.events`, `livevote.retry`, `livevote.dlx`, `results.events.queue`, `results.events.retry.queue` y `results.events.dlq`) sin acoplamiento por cabeceras `__TypeId__`.
+  - Publicación `AFTER_COMMIT` de `PollCreated` (sin datos del dueño) y `VoteCast` en `services/votes-service` (`0.2.0`).
+  - Nuevo proyecto `services/results-service` (`0.2.0`, WebFlux + Spring Data JPA fuera del event loop sobre `Schedulers.boundedElastic()`, Flyway `V1__init_results_schema.sql`, endpoint `GET /api/results/{id}`).
+  - Idempotencia atómica en `processed_votes` (`ON CONFLICT DO NOTHING`) y política diferenciada de reintentos (backoff + cola diferida para fallos transitorios/fuera de orden vs `AmqpRejectAndDontRequeueException` -> DLQ para *poison messages*).
+  - Integración completa en `docker-compose.yml` y `docker-compose.override.yml`, verificada con 17 tests en `votes-service`, 11 tests en `results-service` (Testcontainers PostgreSQL + RabbitMQ) y smoke test E2E de 5 contenedores.
+
 ## [0.1.0] - 2026-11-26
 
 ### Agregado

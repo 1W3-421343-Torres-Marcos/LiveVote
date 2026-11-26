@@ -4,6 +4,8 @@ networks:
 
 volumes:
   postgres_votes_data:
+  postgres_results_data:
+  rabbitmq_data:
 
 services:
   postgres-votes:
@@ -23,6 +25,40 @@ services:
       retries: 10
       start_period: 10s
 
+  postgres-results:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_RESULTS_DB}
+      POSTGRES_USER: ${POSTGRES_RESULTS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_RESULTS_PASSWORD}
+    volumes:
+      - postgres_results_data:/var/lib/postgresql/data
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:3.13.7-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   votes-service:
     build:
       context: ./services/votes-service
@@ -31,6 +67,11 @@ services:
       DB_URL: jdbc:postgresql://postgres-votes:5432/${POSTGRES_VOTES_DB}
       DB_USERNAME: ${POSTGRES_VOTES_USER}
       DB_PASSWORD: ${POSTGRES_VOTES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS}
       TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER}
@@ -38,10 +79,40 @@ services:
     depends_on:
       postgres-votes:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - livevote-internal
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+
+  results-service:
+    build:
+      context: ./services/results-service
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://postgres-results:5432/${POSTGRES_RESULTS_DB}
+      DB_USERNAME: ${POSTGRES_RESULTS_USER}
+      DB_PASSWORD: ${POSTGRES_RESULTS_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+    depends_on:
+      postgres-results:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8082/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

@@ -3,6 +3,8 @@ package com.livevote.votes.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.livevote.votes.dto.CastVoteRequest;
@@ -13,6 +15,8 @@ import com.livevote.votes.entity.PollEntity;
 import com.livevote.votes.entity.PollOptionEntity;
 import com.livevote.votes.entity.PollStatus;
 import com.livevote.votes.entity.VoteEntity;
+import com.livevote.votes.event.PollCreatedEvent;
+import com.livevote.votes.event.VoteCastEvent;
 import com.livevote.votes.exception.ConflictException;
 import com.livevote.votes.exception.ForbiddenException;
 import com.livevote.votes.exception.ResourceNotFoundException;
@@ -27,8 +31,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -41,16 +47,18 @@ class PollServiceTest {
     private PollOptionRepository pollOptionRepository;
     @Mock
     private VoteRepository voteRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private PollService pollService;
 
     @BeforeEach
     void setUp() {
-        pollService = new PollService(pollRepository, pollOptionRepository, voteRepository);
+        pollService = new PollService(pollRepository, pollOptionRepository, voteRepository, eventPublisher);
     }
 
     @Test
-    void createPollShouldSaveTrimmedOptionsInOrder() {
+    void createPollShouldSaveTrimmedOptionsInOrderAndPublishEvent() {
         UUID ownerId = UUID.randomUUID();
         UUID pollId = UUID.randomUUID();
         when(pollRepository.save(any(PollEntity.class))).thenAnswer(invocation -> {
@@ -76,6 +84,14 @@ class PollServiceTest {
         assertThat(response.status()).isEqualTo(PollStatus.OPEN);
         assertThat(response.options()).extracting(PollOptionResponse::text).containsExactly("Spring Boot", "Angular");
         assertThat(response.options()).extracting(PollOptionResponse::displayOrder).containsExactly(0, 1);
+
+        ArgumentCaptor<PollCreatedEvent> eventCaptor = ArgumentCaptor.forClass(PollCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        PollCreatedEvent published = eventCaptor.getValue();
+        assertThat(published.eventVersion()).isEqualTo(1);
+        assertThat(published.pollId()).isEqualTo(pollId);
+        assertThat(published.title()).isEqualTo("Favorite stack?");
+        assertThat(published.options()).hasSize(2);
     }
 
     @Test
@@ -132,5 +148,33 @@ class PollServiceTest {
 
         assertThatThrownBy(() -> pollService.castVote(pollId, new CastVoteRequest(optionId, "device-1")))
                 .isInstanceOf(ConflictException.class);
+        verify(eventPublisher, never()).publishEvent(any(VoteCastEvent.class));
+    }
+
+    @Test
+    void castVoteShouldPublishVoteCastEventOnSuccess() {
+        UUID pollId = UUID.randomUUID();
+        UUID optionId = UUID.randomUUID();
+        UUID voteId = UUID.randomUUID();
+        PollEntity poll = new PollEntity(UUID.randomUUID(), "Question", PollStatus.OPEN, Instant.now());
+        ReflectionTestUtils.setField(poll, "id", pollId);
+
+        when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
+        when(pollOptionRepository.existsByIdAndPollId(optionId, pollId)).thenReturn(true);
+        when(voteRepository.saveAndFlush(any(VoteEntity.class))).thenAnswer(invocation -> {
+            VoteEntity vote = invocation.getArgument(0);
+            ReflectionTestUtils.setField(vote, "id", voteId);
+            return vote;
+        });
+
+        pollService.castVote(pollId, new CastVoteRequest(optionId, "device-1"));
+
+        ArgumentCaptor<VoteCastEvent> eventCaptor = ArgumentCaptor.forClass(VoteCastEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        VoteCastEvent published = eventCaptor.getValue();
+        assertThat(published.eventVersion()).isEqualTo(1);
+        assertThat(published.voteId()).isEqualTo(voteId);
+        assertThat(published.pollId()).isEqualTo(pollId);
+        assertThat(published.optionId()).isEqualTo(optionId);
     }
 }

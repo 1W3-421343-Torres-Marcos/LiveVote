@@ -7,14 +7,47 @@ services:
     ports:
       - "5433:5432"
 
+  postgres-results:
+    environment:
+      POSTGRES_DB: ${POSTGRES_RESULTS_DB:-results_db}
+      POSTGRES_USER: ${POSTGRES_RESULTS_USER:-results_user}
+      POSTGRES_PASSWORD: ${POSTGRES_RESULTS_PASSWORD:-results_dev_password}
+    ports:
+      - "5434:5432"
+
+  rabbitmq:
+    image: rabbitmq:3.13.7-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-livevote}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-livevote_dev_password}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
   votes-service:
     environment:
       DB_URL: jdbc:postgresql://postgres-votes:5432/${POSTGRES_VOTES_DB:-votes_db}
       DB_USERNAME: ${POSTGRES_VOTES_USER:-votes_user}
       DB_PASSWORD: ${POSTGRES_VOTES_PASSWORD:-votes_dev_password}
+      RABBITMQ_USER: ${RABBITMQ_USER:-livevote}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-livevote_dev_password}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-production-minimum-32-bytes}
       JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-7200}
       TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     ports:
       - "8081:8081"
+
+  results-service:
+    environment:
+      DB_URL: jdbc:postgresql://postgres-results:5432/${POSTGRES_RESULTS_DB:-results_db}
+      DB_USERNAME: ${POSTGRES_RESULTS_USER:-results_user}
+      DB_PASSWORD: ${POSTGRES_RESULTS_PASSWORD:-results_dev_password}
+      RABBITMQ_USER: ${RABBITMQ_USER:-livevote}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-livevote_dev_password}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    ports:
+      - "8082:8082"

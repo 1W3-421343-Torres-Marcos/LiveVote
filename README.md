@@ -81,7 +81,9 @@ docker compose up --build
 ```
 
 - `votes-service` escucha en `http://localhost:8081` (`GET /actuator/health/readiness`).
-- `postgres-votes` queda accesible en desarrollo en `localhost:5433`.
+- `results-service` escucha en `http://localhost:8082` (`GET /actuator/health/readiness`).
+- `postgres-votes` en `localhost:5433` y `postgres-results` en `localhost:5434`.
+- RabbitMQ AMQP en `localhost:5672` y Management UI en `http://localhost:15672` (`livevote` / `livevote_dev_password` en dev).
 
 ---
 
@@ -91,8 +93,8 @@ docker compose up --build
 | :--- | :--- | :--- |
 | **F0** | Bootstrap del monorepo, `AGENTS.md`, 9 skills y plan maestro | ✅ Completada |
 | **F1** | `votes-service` aislado + `postgres-votes` + Flyway + Compose inicial | ✅ Completada (`v0.1.0`) |
-| **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ⏳ Siguiente |
-| **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ⬜ Pendiente |
+| **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ✅ Completada (`v0.2.0`) |
+| **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ⏳ Siguiente |
 | **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ⬜ Pendiente |
 | **F5** | Frontend Angular standalone + `nginx` | ⬜ Pendiente |
 | **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ⬜ Pendiente |

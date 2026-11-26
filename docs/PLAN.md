@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F1` completada (`v0.1.0`) → **Siguiente**: `F2` (`RabbitMQ` + `results-service`)
-- **Última verificación exitosa**: `mvn -B -f "services\votes-service\pom.xml" test` (`14/14` tests en verde con Testcontainers `postgres:16.6-alpine`), `docker compose config` y `docker compose up -d --build` con smoke test HTTP (`readiness` `200`, registro `201`, encuesta `201`, voto `201` y duplicado `409`).
+- **Fase actual**: `F2` completada (`v0.2.0`) → **Siguiente**: `F3` (`api-gateway` y red interna)
+- **Última verificación exitosa**: `votes-service` (`17/17` tests en verde) + `results-service` (`11/11` tests en verde) con Testcontainers (`postgres:16.6-alpine` + `rabbitmq:3.13.7-alpine`), `docker compose config` y `docker compose up -d --build` (5 contenedores `healthy`) con smoke test HTTP end-to-end (`readiness` `200`, encuesta proyectada `0 -> 1` voto, duplicado `409`).
 
 ### Bitácora de hitos
 
@@ -15,6 +15,7 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | :--- | :--- | :--- | :--- | :--- |
 | **F0** | 2026-11-22 | ✅ Completada | `git status -u` + validación de `AGENTS.md` y 9 skills | Base del monorepo, reglas, contratos y bitácora listos |
 | **F1** | 2026-11-26 | ✅ Completada (`v0.1.0`) | `mvn test` (`14/14`, Testcontainers `postgres:16.6-alpine`) + `docker compose up -d --build` + smoke HTTP | `votes-service` aislado + `postgres-votes` + Flyway V1 listos; Testcontainers fijado en `1.21.4` por Docker Engine 29 |
+| **F2** | 2026-11-26 | ✅ Completada (`v0.2.0`) | `mvn test` (`17/17` votes + `11/11` results, Testcontainers Postgres+RabbitMQ) + Compose E2E (5 contenedores) | Refactor previo a *Package by Layer* (`82a2497`); RabbitMQ `AFTER_COMMIT`, idempotencia atómica y DLQ verificados |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -94,12 +95,12 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: tests unitarios + test de integración con Testcontainers (PostgreSQL) en `mvn test` pasando al 100 %; `POST /api/polls/{id}/votes` responde `201`, `409` en duplicado, `404` si no existe y `422` si está cerrada.
 
 ### F2 — RabbitMQ y `results-service`
-- [ ] Agregar `rabbitmq` y `postgres-results` (volumen, base y usuario exclusivos) a Docker Compose con topología durable (`livevote.events`, `livevote.dlx`, `results.events.queue`, `results.events.dlq`).
-- [ ] Publicar eventos `PollCreated` (sin datos del dueño) y `VoteCast` en `votes-service` (`AFTER_COMMIT`).
-- [ ] Crear proyecto `services/results-service` (Spring WebFlux + Spring Data JPA fuera del event loop + Flyway en `postgres-results`).
-- [ ] Implementar consumo idempotente mediante tabla `processed_votes` (`vote_id` PK en la misma transacción) y política de errores (reintento con backoff para fallos transitorios; `AmqpRejectAndDontRequeueException` -> DLQ solo para poison messages).
-- [ ] Exponer `GET /api/results/{id}` (con lectura en `Schedulers.boundedElastic()`).
-- [ ] **Verificación**: tests unitarios + Testcontainers (PostgreSQL y RabbitMQ) pasando; un voto en `votes-service` actualiza `postgres-results`; evento duplicado no altera conteos; payload corrupto termina en `results.events.dlq`.
+- [x] Agregar `rabbitmq` y `postgres-results` (volumen, base y usuario exclusivos) a Docker Compose con topología durable (`livevote.events`, `livevote.dlx`, `results.events.queue`, `results.events.dlq`).
+- [x] Publicar eventos `PollCreated` (sin datos del dueño) y `VoteCast` en `votes-service` (`AFTER_COMMIT`).
+- [x] Crear proyecto `services/results-service` (Spring WebFlux + Spring Data JPA fuera del event loop + Flyway en `postgres-results`).
+- [x] Implementar consumo idempotente mediante tabla `processed_votes` (`vote_id` PK en la misma transacción) y política de errores (reintento con backoff para fallos transitorios; `AmqpRejectAndDontRequeueException` -> DLQ solo para poison messages).
+- [x] Exponer `GET /api/results/{id}` (con lectura en `Schedulers.boundedElastic()`).
+- [x] **Verificación**: tests unitarios + Testcontainers (PostgreSQL y RabbitMQ) pasando; un voto en `votes-service` actualiza `postgres-results`; evento duplicado no altera conteos; payload corrupto termina en `results.events.dlq`.
 
 ### F3 — `api-gateway` y red interna
 - [ ] Crear proyecto `services/api-gateway` (Spring Cloud Gateway + Resilience4j + validación JWT HS256).

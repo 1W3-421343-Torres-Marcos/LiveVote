@@ -19,6 +19,13 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:livevote}
+    password: ${RABBITMQ_PASSWORD:livevote_dev_password}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 3000ms
 
 app:
   jwt:
