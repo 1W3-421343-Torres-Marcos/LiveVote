@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: votes-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/votes_db}
+    username: ${DB_USERNAME:votes_user}
+    password: ${DB_PASSWORD:votes_dev_password}
+    hikari:
+      connection-timeout: 5000
+      validation-timeout: 3000
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-jwt-secret-change-in-production-minimum-32-bytes}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:7200}
+  security:
+    trust-gateway-header: ${TRUST_GATEWAY_HEADER:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db

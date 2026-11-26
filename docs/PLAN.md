@@ -6,14 +6,15 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F0` completada → **Siguiente**: `F1` (`votes-service` aislado + `postgres-votes`)
-- **Última verificación exitosa**: Bootstrap verificado (`git status -u`, `AGENTS.md` 8854 bytes sin frontmatter, 9 skills válidas bajo `.agents/skills/`).
+- **Fase actual**: `F1` completada (`v0.1.0`) → **Siguiente**: `F2` (`RabbitMQ` + `results-service`)
+- **Última verificación exitosa**: `mvn -B -f "services\votes-service\pom.xml" test` (`14/14` tests en verde con Testcontainers `postgres:16.6-alpine`), `docker compose config` y `docker compose up -d --build` con smoke test HTTP (`readiness` `200`, registro `201`, encuesta `201`, voto `201` y duplicado `409`).
 
 ### Bitácora de hitos
 
 | Fase | Fecha | Estado | Evidencia / Comando verificado | Notas / Pendientes |
 | :--- | :--- | :--- | :--- | :--- |
 | **F0** | 2026-11-22 | ✅ Completada | `git status -u` + validación de `AGENTS.md` y 9 skills | Base del monorepo, reglas, contratos y bitácora listos |
+| **F1** | 2026-11-26 | ✅ Completada (`v0.1.0`) | `mvn test` (`14/14`, Testcontainers `postgres:16.6-alpine`) + `docker compose up -d --build` + smoke HTTP | `votes-service` aislado + `postgres-votes` + Flyway V1 listos; Testcontainers fijado en `1.21.4` por Docker Engine 29 |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -85,12 +86,12 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: estructura limpia sin secretos ni código compartido; `AGENTS.md` < 24 KB sin frontmatter; 9 skills válidas.
 
 ### F1 — `votes-service` aislado + `postgres-votes`
-- [ ] Crear proyecto Maven en `services/votes-service` (Java 17, Spring Boot 3.x).
-- [ ] Implementar módulo `identity` (`POST /api/auth/register`, `POST /api/auth/login`, BCrypt, JWT HS256 2 h) y resolución dual de usuario (`X-User-Id` solo si `app.security.trust-gateway-header=true`, si no Bearer JWT).
-- [ ] Implementar módulo `polls` (`POST /api/polls` con 2–6 opciones, `GET /api/polls/mine`, `POST /api/polls/{id}/close` solo dueño, `GET /api/polls/{id}`, `POST /api/polls/{id}/votes`).
-- [ ] Definir migraciones Flyway en `postgres-votes` incluyendo restricción única `(poll_id, device_id)`.
-- [ ] Crear `docker-compose.yml` y `docker-compose.override.yml` iniciales con `postgres-votes` (volumen, base y usuario exclusivos).
-- [ ] **Verificación**: tests unitarios + test de integración con Testcontainers (PostgreSQL) en `mvn test` pasando al 100 %; `POST /api/polls/{id}/votes` responde `201`, `409` en duplicado, `404` si no existe y `422` si está cerrada.
+- [x] Crear proyecto Maven en `services/votes-service` (Java 17, Spring Boot 3.x).
+- [x] Implementar módulo `identity` (`POST /api/auth/register`, `POST /api/auth/login`, BCrypt, JWT HS256 2 h) y resolución dual de usuario (`X-User-Id` solo si `app.security.trust-gateway-header=true`, si no Bearer JWT).
+- [x] Implementar módulo `polls` (`POST /api/polls` con 2–6 opciones, `GET /api/polls/mine`, `POST /api/polls/{id}/close` solo dueño, `GET /api/polls/{id}`, `POST /api/polls/{id}/votes`).
+- [x] Definir migraciones Flyway en `postgres-votes` incluyendo restricción única `(poll_id, device_id)`.
+- [x] Crear `docker-compose.yml` y `docker-compose.override.yml` iniciales con `postgres-votes` (volumen, base y usuario exclusivos).
+- [x] **Verificación**: tests unitarios + test de integración con Testcontainers (PostgreSQL) en `mvn test` pasando al 100 %; `POST /api/polls/{id}/votes` responde `201`, `409` en duplicado, `404` si no existe y `422` si está cerrada.
 
 ### F2 — RabbitMQ y `results-service`
 - [ ] Agregar `rabbitmq` y `postgres-results` (volumen, base y usuario exclusivos) a Docker Compose con topología durable (`livevote.events`, `livevote.dlx`, `results.events.queue`, `results.events.dlq`).

@@ -1,0 +1,48 @@
+networks:
+  livevote-internal:
+    driver: bridge
+
+volumes:
+  postgres_votes_data:
+
+services:
+  postgres-votes:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_VOTES_DB}
+      POSTGRES_USER: ${POSTGRES_VOTES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_VOTES_PASSWORD}
+    volumes:
+      - postgres_votes_data:/var/lib/postgresql/data
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  votes-service:
+    build:
+      context: ./services/votes-service
+    environment:
+      SERVER_PORT: 8081
+      DB_URL: jdbc:postgresql://postgres-votes:5432/${POSTGRES_VOTES_DB}
+      DB_USERNAME: ${POSTGRES_VOTES_USER}
+      DB_PASSWORD: ${POSTGRES_VOTES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS}
+      TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+    depends_on:
+      postgres-votes:
+        condition: service_healthy
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s

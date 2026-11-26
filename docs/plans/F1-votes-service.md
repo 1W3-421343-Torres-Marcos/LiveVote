@@ -2,7 +2,7 @@
 
 - **Fase**: `F1`
 - **Versión objetivo**: `v0.1.0`
-- **Estado**: `Pendiente de aprobación`
+- **Estado**: `Completado (v0.1.0)`
 - **Fecha**: `2026-11-26`
 
 ---
@@ -124,14 +124,17 @@ Paquete raíz: `com.livevote.votes` (`Controller -> Service -> Repository`). Sin
 
 ## 6. Cierre de fase F1
 
-- [ ] Marcar todos los ítems de F1 en `docs/PLAN.md` y registrar evidencia en la bitácora.
-- [ ] Actualizar estado de este plan a `Completado (v0.1.0)`.
-- [ ] Actualizar tabla de fases en `README.md`.
-- [ ] Agregar sección `## [0.1.0]` en `CHANGELOG.md`.
-- [ ] Commit convencional en inglés y tag Git `v0.1.0`.
+- [x] Marcar todos los ítems de F1 en `docs/PLAN.md` y registrar evidencia en la bitácora.
+- [x] Actualizar estado de este plan a `Completado (v0.1.0)`.
+- [x] Actualizar tabla de fases en `README.md`.
+- [x] Agregar sección `## [0.1.0]` en `CHANGELOG.md`.
+- [x] Commit convencional en inglés y tag Git `v0.1.0`.
 
 ---
 
 ## Desvíos y aprendizajes
 
-*(Completar al finalizar F1 si surge algún ajuste respecto a este diseño.)*
+- **Testcontainers `1.21.4` por Docker Engine `29.9.3`**: Spring Boot `3.4.3` trae por defecto Testcontainers `1.20.5`, cuyo cliente `docker-java` solicita una versión de API antigua rechazada con HTTP `400` por Docker Engine `29.9.3` (mínimo `1.40`). Se fijó `<testcontainers.version>1.21.4</testcontainers.version>` en `services/votes-service/pom.xml`.
+- **JDK 21 local compilando hacia Java 17**: el host tiene instalado JDK `21.0.10`, por lo que se configuró `<maven.compiler.release>17</maven.compiler.release>` en `pom.xml`, mientras que el `Dockerfile` compila y corre nativamente sobre imágenes de Java 17.
+- **Grupo `readiness` en Actuator**: se configuró explícitamente `management.endpoint.health.group.readiness.include: readinessState,db` para garantizar que `/actuator/health/readiness` refleje el estado real de `postgres-votes`.
+- **Variables en `docker-compose.yml` vs `docker-compose.override.yml`**: la definición base no incluye contraseñas por defecto; los fallbacks de desarrollo local (`votes_db`, `votes_dev_password`, etc.) viven únicamente en `docker-compose.override.yml`, permitiendo levantar en local con `docker compose up --build` sin copiar `.env`.

@@ -72,13 +72,26 @@ Cada componente bajo `services/*` y `frontend/` es un proyecto independiente con
 
 ---
 
+## Ejecución local
+
+Con Docker Desktop en ejecución (sin necesidad de crear `.env` para desarrollo local, ya que `docker-compose.override.yml` aporta valores por defecto de dev):
+
+```bash
+docker compose up --build
+```
+
+- `votes-service` escucha en `http://localhost:8081` (`GET /actuator/health/readiness`).
+- `postgres-votes` queda accesible en desarrollo en `localhost:5433`.
+
+---
+
 ## Estado de las fases
 
 | Fase | Alcance | Estado |
 | :--- | :--- | :--- |
 | **F0** | Bootstrap del monorepo, `AGENTS.md`, 9 skills y plan maestro | ✅ Completada |
-| **F1** | `votes-service` aislado + `postgres-votes` + Flyway + Compose inicial | ⏳ Siguiente |
-| **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ⬜ Pendiente |
+| **F1** | `votes-service` aislado + `postgres-votes` + Flyway + Compose inicial | ✅ Completada (`v0.1.0`) |
+| **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ⏳ Siguiente |
 | **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ⬜ Pendiente |
 | **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ⬜ Pendiente |
 | **F5** | Frontend Angular standalone + `nginx` | ⬜ Pendiente |

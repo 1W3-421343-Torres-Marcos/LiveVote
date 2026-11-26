@@ -1,0 +1,20 @@
+services:
+  postgres-votes:
+    environment:
+      POSTGRES_DB: ${POSTGRES_VOTES_DB:-votes_db}
+      POSTGRES_USER: ${POSTGRES_VOTES_USER:-votes_user}
+      POSTGRES_PASSWORD: ${POSTGRES_VOTES_PASSWORD:-votes_dev_password}
+    ports:
+      - "5433:5432"
+
+  votes-service:
+    environment:
+      DB_URL: jdbc:postgresql://postgres-votes:5432/${POSTGRES_VOTES_DB:-votes_db}
+      DB_USERNAME: ${POSTGRES_VOTES_USER:-votes_user}
+      DB_PASSWORD: ${POSTGRES_VOTES_PASSWORD:-votes_dev_password}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-production-minimum-32-bytes}
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-7200}
+      TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER:-false}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    ports:
+      - "8081:8081"
