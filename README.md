@@ -44,7 +44,9 @@ api-gateway (Spring Cloud Gateway: JWT, X-User-Id, rate limit IP, Circuit Breake
 .
 ├── .agents/skills/          # Skills específicas del proyecto para agentes
 ├── .github/workflows/       # Pipelines CI/CD por ruta modificada (F7)
-├── docs/PLAN.md             # Plan maestro detallado F0–F9 y contratos
+├── docs/
+│   ├── PLAN.md              # Plan maestro, bitácora y checklists F0–F9
+│   └── plans/               # Planes detallados de implementación por fase
 ├── frontend/                # SPA Angular standalone + nginx (F5)
 ├── services/
 │   ├── api-gateway/         # Spring Cloud Gateway + Resilience4j (F3)
@@ -52,7 +54,8 @@ api-gateway (Spring Cloud Gateway: JWT, X-User-Id, rate limit IP, Circuit Breake
 │   └── results-service/     # Lectura + SSE: WebFlux + JPA + AMQP (F2/F4)
 ├── .env.example             # Variables de entorno para desarrollo local
 ├── .env.prod.example        # Plantilla sin credenciales para producción
-└── AGENTS.md                # Reglas de arquitectura y convenciones
+├── AGENTS.md                # Reglas de arquitectura y convenciones
+└── CHANGELOG.md             # Historial de versiones (Keep a Changelog)
 ```
 
 Cada componente bajo `services/*` y `frontend/` es un proyecto independiente con su propio build, suite de tests y `Dockerfile`, sin compartir código entre sí.
@@ -63,6 +66,7 @@ Cada componente bajo `services/*` y `frontend/` es un proyecto independiente con
 
 - **Código, APIs, JSON y commits**: en **inglés** (Conventional Commits).
 - **Documentación**: en **español**.
+- **Versionado**: SemVer unificado (`v0.X.0` por fase hasta `v1.0.0` en producción), registrado en [CHANGELOG.md](./CHANGELOG.md); contratos de eventos versionados vía `eventVersion`.
 - **Stack**: Java 17, Spring Boot 3.x, Maven, PostgreSQL, RabbitMQ, Angular moderno (standalone, `@if`/`@for`), nginx, Docker / Docker Compose (imágenes Distroless multi-arch con tags fijos, nunca `latest`).
 - **Reglas detalladas**: consultar [AGENTS.md](./AGENTS.md) y el plan completo en [docs/PLAN.md](./docs/PLAN.md).
 

@@ -71,12 +71,19 @@ api-gateway (Spring Cloud Gateway: JWT, strip/inject X-User-Id, rate limit IP, C
 - **Estructura de paquetes Java**: Organización por capacidad (`package-by-feature`, ej. `identity`, `polls`, `messaging`, `common`) y DTOs propios dentro de cada servicio.
 - **Migraciones**: Flyway obligatorio en `votes-service` y `results-service` (sin `ddl-auto: update` ni `create`).
 - **Testing**: Tests unitarios para la lógica de negocio + al menos un test de integración por servicio usando **Testcontainers** (PostgreSQL y/o RabbitMQ reales).
-- **Versionado**: Versionado semántico (`MAJOR.MINOR.PATCH`).
+- **Versionado unificado (SemVer `MAJOR.MINOR.PATCH`)**:
+  - Releases y tags Git unificados por hito: `v0.1.0` (F1) … `v0.7.0` (F7), `PATCH` (`v0.1.1`) para correcciones intermedias, y `v1.0.0` al completar el despliegue productivo (F8/F9).
+  - Las versiones en `pom.xml` y `package.json` se mantienen alineadas al hito vigente.
+  - En F7+, las imágenes Docker llevan tag `sha-<short>` en `main` y `X.Y.Z` en tags SemVer (coincidente con `APP_VERSION`; nunca `latest`).
+  - Los contratos de eventos RabbitMQ mantienen versionado independiente vía `"eventVersion"`.
 - **Formato de archivos en Windows**: Mantener fin de línea `LF` según `.gitattributes` para evitar errores dentro de contenedores Linux/WSL2.
-- **Seguimiento de progreso entre sesiones**:
-  1. Al iniciar una sesión o fase, leer `docs/PLAN.md` para retomar desde el estado real registrado.
+- **Registro de documentación y planes por fase**:
+  - Cada fase de implementación cuenta con un plan detallado en `docs/plans/F<N>-<nombre>.md` redactado y aprobado antes de codificar, y marcado `Completado (v0.X.0)` (anotando desvíos técnicos reales) al cerrarse.
+  - Roles únicos sin duplicación: `README.md` (portada del proyecto), `AGENTS.md` (arquitectura y reglas), `docs/PLAN.md` (checklists y bitácora), `CHANGELOG.md` (historial *Keep a Changelog* en español) y `.agents/skills/*` (runbooks por módulo). `docs/demos.md` y `docs/runbook-prod.md` se crean recién al llegar a F6/F8/F9.
+- **Seguimiento de progreso y cierre de fase**:
+  1. Al iniciar una sesión o fase, leer `docs/PLAN.md` y el plan vigente en `docs/plans/` para retomar desde el estado real registrado.
   2. Marcar ítems/fases como completados (`- [x]`) **únicamente** después de pasar todos sus tests y criterios de verificación.
-  3. Al cerrar cada fase: actualizar los checkboxes y la bitácora en `docs/PLAN.md`, actualizar la tabla de estado en `README.md` y realizar un commit convencional en inglés (con tag semántico tipo `v0.1.0` cuando corresponda al cierre de hito).
+  3. Al cerrar cada fase: actualizar checkboxes y bitácora en `docs/PLAN.md`, marcar `Completado (v0.X.0)` (con desvíos si hubo) en `docs/plans/F<N>-*.md`, actualizar la tabla en `README.md`, agregar la entrada en `CHANGELOG.md`, crear un commit convencional en inglés y etiquetar el hito con tag semántico `v0.X.0`.
 
 ---
 
