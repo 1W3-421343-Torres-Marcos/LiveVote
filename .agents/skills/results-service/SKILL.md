@@ -13,6 +13,7 @@ Servicio de **lectura y tiempo real**, propietario exclusivo de `postgres-result
 ## Stack y regla no bloqueante (WebFlux + JPA)
 
 - **Stack**: Java 17, Spring Boot 3.x, Maven, Spring WebFlux, Spring Data JPA, Flyway, Spring AMQP, PostgreSQL.
+- **Estructura de paquetes (Package by Layer)**: bajo `com.livevote.results`, usar únicamente los paquetes necesarios (`config`, `controller`, `service`, `repository`, `entity`, `dto`, `event`, `exception`), sin paquete genérico `common` y espejando la misma estructura en `src/test/java`.
 - **Regla estricta**: NUNCA ejecutar llamadas bloqueantes JPA/JDBC en el event loop de Reactor Netty:
   - En el consumidor AMQP: corre en hilos del contenedor listener de Spring AMQP.
   - En los endpoints WebFlux (`GET /api/results/{id}`, carga inicial de SSE): envolver toda lectura JPA en `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())`.

@@ -2,16 +2,16 @@ package com.livevote.votes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.livevote.votes.common.ApiErrorResponse;
-import com.livevote.votes.common.AuthenticationFilter;
-import com.livevote.votes.identity.AuthResponse;
-import com.livevote.votes.identity.LoginRequest;
-import com.livevote.votes.identity.RegisterRequest;
-import com.livevote.votes.polls.CastVoteRequest;
-import com.livevote.votes.polls.CreatePollRequest;
-import com.livevote.votes.polls.PollResponse;
-import com.livevote.votes.polls.PollStatus;
-import com.livevote.votes.polls.VoteResponse;
+import com.livevote.votes.dto.AuthResponse;
+import com.livevote.votes.dto.CastVoteRequest;
+import com.livevote.votes.dto.CreatePollRequest;
+import com.livevote.votes.dto.LoginRequest;
+import com.livevote.votes.dto.PollResponse;
+import com.livevote.votes.dto.RegisterRequest;
+import com.livevote.votes.dto.VoteResponse;
+import com.livevote.votes.entity.PollStatus;
+import com.livevote.votes.exception.ApiErrorResponse;
+import com.livevote.votes.security.AuthenticationFilter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

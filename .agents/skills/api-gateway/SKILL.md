@@ -13,6 +13,7 @@ description: >-
 ## Stack y tabla de enrutamiento
 
 - **Stack**: Java 17, Spring Boot 3.x, Maven, Spring Cloud Gateway (reactivo/WebFlux), Resilience4j Circuit Breaker, `jjwt` (validación HS256).
+- **Estructura de paquetes (Package by Layer)**: bajo `com.livevote.gateway`, usar únicamente los paquetes necesarios (`config`, `security`, `controller` si usa fallback, `service`/filtros, `dto`, `exception`), sin `entity`, `repository`, `event` ni paquete `common`, y espejando la estructura en `src/test/java`.
 - **Rutas**:
   - `/api/auth/**`, `/api/polls/**`, `/api/votes/**` -> `http://votes-service:8081` (o URL por variable de entorno).
   - `/api/results/**` -> `http://results-service:8082`.

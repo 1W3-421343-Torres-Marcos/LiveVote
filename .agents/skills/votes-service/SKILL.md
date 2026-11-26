@@ -13,11 +13,17 @@ Servicio de **escritura** y propietario exclusivo de `postgres-votes`. Contiene 
 ## Stack y estructura de paquetes
 
 - **Stack**: Java 17, Spring Boot 3.x, Maven, Spring Web, Spring Data JPA, Spring Security, Spring AMQP, Flyway, PostgreSQL.
-- **Paquetes por capacidad** (`com.livevote.votes`):
-  - `identity/`: registro, login, `PasswordEncoder` (BCrypt), `JwtService`.
-  - `polls/`: creación, listado propio, consulta pública, cierre y registro de votos.
-  - `messaging/`: publicación asíncrona hacia RabbitMQ (`PollCreated`, `VoteCast`, `PollClosed`).
-  - `common/`: manejo global de excepciones (`@RestControllerAdvice`), configuración de seguridad y `traceId`.
+- **Estructura de paquetes (Package by Layer)** bajo `com.livevote.votes` (espejada en `src/test/java`):
+  - `config/`: `SecurityConfig`, `SecurityProperties`, `JwtProperties`.
+  - `security/`: `AuthenticationFilter`, `JwtService`.
+  - `controller/`: `AuthController`, `PollController`.
+  - `service/`: `IdentityService`, `PollService`.
+  - `repository/`: `UserRepository`, `PollRepository`, `PollOptionRepository`, `VoteRepository`.
+  - `entity/`: `UserEntity`, `PollEntity`, `PollOptionEntity`, `VoteEntity`, `PollStatus`.
+  - `dto/`: requests/responses de auth, encuestas y votos (o `dto.auth` / `dto.poll` si crece).
+  - `event/`: publicadores y DTOs de eventos RabbitMQ (`PollCreated`, `VoteCast`, `PollClosed` desde F2+).
+  - `exception/`: `GlobalExceptionHandler`, `ApiErrorResponse` y excepciones de dominio.
+  - Sin paquete genérico `common`; crear solo los paquetes necesarios en cada fase.
 - **Capas**: `Controller -> Service -> Repository / Publisher`. Sin lógica de negocio en controllers.
 
 ## Contratos REST y reglas de negocio

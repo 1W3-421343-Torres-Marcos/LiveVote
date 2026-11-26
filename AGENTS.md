@@ -68,7 +68,17 @@ api-gateway (Spring Cloud Gateway: JWT, strip/inject X-User-Id, rate limit IP, C
 ## 5. Convenciones de desarrollo y calidad
 
 - **Idioma**: Identificadores de código, nombres de clases/métodos, endpoints REST, campos JSON, variables de entorno y mensajes de commit en **inglés** (Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`, `refactor:`). Toda la documentación (`README.md`, `AGENTS.md`, `docs/`, skills) en **español**.
-- **Estructura de paquetes Java**: Organización por capacidad (`package-by-feature`, ej. `identity`, `polls`, `messaging`, `common`) y DTOs propios dentro de cada servicio.
+- **Estructura de paquetes Java (Package by Layer obligatorio)**: Todos los microservicios Spring Boot (`votes-service`, `results-service` y `api-gateway`) organizan sus clases por capas bajo el paquete raíz del servicio, manteniendo DTOs propios sin compartir código:
+  - `config`: configuraciones de Spring y clases `@ConfigurationProperties` (ej. `SecurityConfig`, `SecurityProperties`, `JwtProperties`).
+  - `security`: filtros y servicios de autenticación/JWT (ej. `AuthenticationFilter`, `JwtService`).
+  - `controller`: controladores REST / SSE.
+  - `service`: lógica de negocio.
+  - `repository`: interfaces de persistencia (Spring Data JPA).
+  - `entity`: entidades JPA.
+  - `dto`: objetos de entrada/salida (requests y responses). Si crece, se permiten subpaquetes internos por dominio (ej. `dto.auth`, `dto.poll`).
+  - `event`: DTOs de eventos, publicadores y consumidores de RabbitMQ (cuando aplique).
+  - `exception`: `GlobalExceptionHandler`, `ApiErrorResponse` y excepciones personalizadas.
+  - **Reglas de organización**: prohibido crear paquetes genéricos `common` que mezclen seguridad con manejo de excepciones; crear únicamente los paquetes que el microservicio realmente necesite (ej. `api-gateway` no tendrá `entity` ni `repository`); mantener los tests espejando esta misma estructura bajo `src/test/java`.
 - **Migraciones**: Flyway obligatorio en `votes-service` y `results-service` (sin `ddl-auto: update` ni `create`).
 - **Testing**: Tests unitarios para la lógica de negocio + al menos un test de integración por servicio usando **Testcontainers** (PostgreSQL y/o RabbitMQ reales).
 - **Versionado unificado (SemVer `MAJOR.MINOR.PATCH`)**:
