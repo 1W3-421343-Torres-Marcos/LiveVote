@@ -4,6 +4,21 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
+### Agregado
+
+- Nueva aplicación frontend `frontend/` en **Angular 20 LTS** (100 % standalone, sin `NgModules`, control flow `@if`/`@else`/`@for (...; track ...)`, reactive forms, signals y proxy de dev `proxy.conf.json`).
+- Capa `core/` con modelos DTO tipados, `DeviceIdService` (`crypto.randomUUID()` en `localStorage`), `AuthService` (JWT + `expiresAt`), `PollService`, `ResultsService` (`EventSource` envuelto en `Observable` dentro de `NgZone`, `EVENT_SOURCE_FACTORY` y cierre limpio en teardown), `authGuard`/`guestGuard` y `jwtInterceptor` (inyección `Bearer` y logout automático ante `401`).
+- 4 pantallas obligatorias + shell en `features/`: Auth (`/login`, `/register`), Panel del presentador (`/polls`, `/polls/new` con `FormArray` de 2–6 opciones, copia de link y cierre), Votación mobile-first (`/vote/:id` con manejo de `201`/`409`/`404`/`422`/`429`/`503`) y Resultados en vivo en modo proyector (`/results/:id` con tema oscuro, barras en tiempo real, latido `heartbeat`, pantalla completa, `takeUntilDestroyed` y corte ante `404`).
+- `frontend/nginx.conf` con `/healthz`, proxy mismo origen `/api/` hacia `api-gateway`, fallback SPA (`try_files`) y bloque SSE dedicado (`proxy_buffering off`, `proxy_cache off`, `proxy_http_version 1.1`, `proxy_read_timeout 3600s`, `X-Accel-Buffering no`).
+- `frontend/Dockerfile` multi-stage con tags fijos (`node:22.12.0-alpine3.20` → `nginx:1.27.3-alpine`) e integración de `frontend` en `docker-compose.yml` y `docker-compose.override.yml` (`${FRONTEND_PORT:-4200}:80`).
+- Suite de tests unitarios Jasmine/Karma en `frontend/` (`14/14 SUCCESS` en `ChromeHeadless`) y verificación E2E completa (SSE vía `nginx` + flujo real en navegador).
+
+### Cambiado
+
+- Alineación de versiones Maven y npm a `0.5.0` en `frontend/package.json`, `services/votes-service/pom.xml`, `services/results-service/pom.xml` y `services/api-gateway/pom.xml`.
+
 ## [0.4.0] - 2026-11-27
 
 ### Agregado

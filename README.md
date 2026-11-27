@@ -80,7 +80,8 @@ Con Docker Desktop en ejecución (sin necesidad de crear `.env` para desarrollo 
 docker compose up --build
 ```
 
-- `api-gateway` escucha en `http://localhost:8080` (`GET /actuator/health/readiness`) como único punto de entrada HTTP (`/api/auth/**`, `/api/polls/**`, `/api/votes/**`, `/api/results/**`).
+- `frontend` (`nginx` + SPA Angular) escucha en `http://localhost:4200` (configurable con `FRONTEND_PORT`) como punto de entrada web con proxy mismo origen `/api` hacia `api-gateway` (sin CORS y con SSE sin buffering).
+- `api-gateway` escucha en `http://localhost:8080` (`GET /actuator/health/readiness`) como puerta de enlace de API para debug directo (`/api/auth/**`, `/api/polls/**`, `/api/votes/**`, `/api/results/**`).
 - `votes-service` y `results-service` permanecen aislados en la red interna `livevote-internal` (sin puertos publicados al host).
 - `postgres-votes` en `localhost:5433` y `postgres-results` en `localhost:5434`.
 - RabbitMQ AMQP en `localhost:5672` y Management UI en `http://localhost:15672` (`livevote` / `livevote_dev_password` en dev).
@@ -96,8 +97,8 @@ docker compose up --build
 | **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ✅ Completada (`v0.2.0`) |
 | **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ✅ Completada (`v0.3.0`) |
 | **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ✅ Completada (`v0.4.0`) |
-| **F5** | Frontend Angular standalone + `nginx` | ⏳ Siguiente |
-| **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ⬜ Pendiente |
+| **F5** | Frontend Angular standalone + `nginx` | ✅ Completada (`v0.5.0`) |
+| **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ⏳ Siguiente |
 | **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ⬜ Pendiente |
 | **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⬜ Pendiente |
 | **F9** | Demos (a)–(d) documentadas, README final y mejoras opcionales | ⬜ Pendiente |

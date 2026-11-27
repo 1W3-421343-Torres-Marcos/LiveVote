@@ -53,3 +53,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     ports:
       - "8080:8080"
+
+  frontend:
+    ports:
+      - "${FRONTEND_PORT:-4200}:80"

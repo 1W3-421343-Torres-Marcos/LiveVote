@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F4` completada (`v0.4.0`) → **Siguiente**: `F5` (`Frontend Angular y nginx`)
-- **Última verificación exitosa**: `results-service` (`19/19` tests en verde con Testcontainers PostgreSQL + RabbitMQ) + `api-gateway` (`11/11` con `SseGatewayStreamingTest` y WireMock) + `votes-service` (`17/17`), `docker compose config` y `docker compose up -d --build` (6 contenedores `healthy`) con verificación `curl -N` end-to-end por `http://localhost:8080/api/results/{id}/stream` (snapshot `176 ms`, voto `201` en vivo `237 ms`, duplicado `409` sin evento extra, `heartbeat` a los `~20 s`, `> 22 s` sin corte y `404` JSON).
+- **Fase actual**: `F5` completada (`v0.5.0`) → **Siguiente**: `F6` (`Observabilidad, resiliencia y demos (c) y (d)`)
+- **Última verificación exitosa**: `frontend` (`14/14` tests Jasmine/Karma en `ChromeHeadless` + `ng build` `352.65 kB`) + backend `0.5.0` (`17/17` votes + `19/19` results + `11/11` gateway) + `docker compose up -d --build` (7 contenedores `healthy`) con SSE sin buffering por `http://localhost:4200` (`curl -N` `> 22 s`) y recorrido E2E completo en navegador real (registro, creación 3 opciones, voto `201`, duplicado `409`, proyector SSE en vivo y cierre de encuesta).
 
 ### Bitácora de hitos
 
@@ -18,6 +18,7 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F2** | 2026-11-26 | ✅ Completada (`v0.2.0`) | `mvn test` (`17/17` votes + `11/11` results, Testcontainers Postgres+RabbitMQ) + Compose E2E (5 contenedores) | Refactor previo a *Package by Layer* (`82a2497`); RabbitMQ `AFTER_COMMIT`, idempotencia atómica y DLQ verificados |
 | **F3** | 2026-11-27 | ✅ Completada (`v0.3.0`) | `mvn test` (`9/9` gateway + `17/17` votes + `11/11` results) + Compose E2E (6 contenedores) | Gateway único en `:8080`, JWT/`X-User-Id`, Caffeine `429`, Resilience4j `503` y puertos `8081`/`8082` internos |
 | **F4** | 2026-11-27 | ✅ Completada (`v0.4.0`) | `mvn test` (`19/19` results + `11/11` gateway + `17/17` votes) + `curl -N` E2E (`> 22 s`) | SSE con snapshot, updates en vivo, `heartbeat` `~20 s`, limpieza sin fugas (`onErrorResume` + `doFinally`) y `response-timeout: -1` |
+| **F5** | 2026-11-27 | ✅ Completada (`v0.5.0`) | `npm test` (`14/14`) + `npm run build` + `mvn test` (`47/47`) + Compose E2E (`nginx` SSE + navegador) | SPA Angular 20 LTS + `nginx` en `:4200`; hallazgo en frío (`TimeLimiter 4 s` vs lazy `RabbitTemplate`) anotado para F6 |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -118,11 +119,11 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: `curl -N` a través de `api-gateway` recibe snapshot inmediato, delta instantáneo al emitir un voto y heartbeats cada ~20 s sin desconexión.
 
 ### F5 — Frontend Angular y `nginx`
-- [ ] Crear aplicación Angular moderna en `frontend/` (standalone, sin `NgModules`, `@if`/`@for` con `track`, guards funcionales e interceptor JWT funcional).
-- [ ] Persistir `deviceId` (UUID vía `crypto.randomUUID()`) y JWT en `localStorage`.
-- [ ] Implementar pantallas: Auth (login/registro), Mis encuestas y Crear (2–6 opciones, compartir link, cerrar), Votar (mobile-first, manejo de `201`/`409`/`404`/`422`) y Resultados en vivo (modo proyector con SSE envuelto en `Observable` y limpieza en `ngOnDestroy`).
-- [ ] Configurar `nginx.conf` (mismo origen `/api` hacia `api-gateway`, fallback SPA y `proxy_buffering off` / `proxy_http_version 1.1` / `proxy_read_timeout` largo para SSE) e integrar `frontend` a Compose.
-- [ ] **Verificación**: `npm test` y `npm run build` en verde; flujo end-to-end completo desde navegador vía `docker compose up`.
+- [x] Crear aplicación Angular moderna en `frontend/` (standalone, sin `NgModules`, `@if`/`@for` con `track`, guards funcionales e interceptor JWT funcional).
+- [x] Persistir `deviceId` (UUID vía `crypto.randomUUID()`) y JWT en `localStorage`.
+- [x] Implementar pantallas: Auth (login/registro), Mis encuestas y Crear (2–6 opciones, compartir link, cerrar), Votar (mobile-first, manejo de `201`/`409`/`404`/`422`) y Resultados en vivo (modo proyector con SSE envuelto en `Observable` y limpieza en `ngOnDestroy`).
+- [x] Configurar `nginx.conf` (mismo origen `/api` hacia `api-gateway`, fallback SPA y `proxy_buffering off` / `proxy_http_version 1.1` / `proxy_read_timeout` largo para SSE) e integrar `frontend` a Compose.
+- [x] **Verificación**: `npm test` y `npm run build` en verde; flujo end-to-end completo desde navegador vía `docker compose up`.
 
 ### F6 — Observabilidad, resiliencia y demos (c) y (d)
 - [ ] Configurar logs JSON estructurados en los 3 servicios (sin passwords, secretos ni JWT) y propagación de `traceId` (`Gateway -> votes-service -> RabbitMQ -> results-service`).
