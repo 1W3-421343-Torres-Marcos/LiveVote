@@ -140,18 +140,40 @@ class ResultsServiceIntegrationTest {
         Message dlqWrongVersion = rabbitTemplate.receive(RabbitMqConfig.DLQ_QUEUE, 5000);
         assertThat(dlqWrongVersion).isNotNull();
 
-        // 5. Missing poll returns 404 & readiness probe returns UP
+        // 5. Missing poll returns 404, X-Trace-Id echoes, and Actuator probes/metrics return UP
         webTestClient.get()
                 .uri("/api/results/{id}", UUID.randomUUID())
+                .header("X-Trace-Id", "trace-res-http-1")
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isNotFound()
+                .expectHeader().valueEquals("X-Trace-Id", "trace-res-http-1");
+
+        webTestClient.get()
+                .uri("/actuator/health/liveness")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .value(body -> assertThat(body).containsEntry("status", "UP"));
 
         webTestClient.get()
                 .uri("/actuator/health/readiness")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new ParameterizedTypeReference<Map<String, Object>>() {})
-                .value(body -> assertThat(body).containsEntry("status", "UP"));
+                .value(body -> {
+                    assertThat(body).containsEntry("status", "UP");
+                    assertThat(body).containsKey("components");
+                });
+
+        webTestClient.get()
+                .uri("/actuator/metrics/livevote.events.consumed.total")
+                .exchange()
+                .expectStatus().isOk();
+
+        webTestClient.get()
+                .uri("/actuator/metrics/livevote.sse.active.channels")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
@@ -249,6 +271,7 @@ class ResultsServiceIntegrationTest {
         byte[] bytes = objectMapper.writeValueAsBytes(payload);
         Message message = MessageBuilder.withBody(bytes)
                 .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                .setHeader("X-Trace-Id", "trace-results-int-1")
                 .build();
         rabbitTemplate.send(RabbitMqConfig.EVENTS_EXCHANGE, routingKey, message);
     }

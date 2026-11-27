@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.livevote.gateway.config.RateLimitProperties;
 import com.livevote.gateway.exception.GatewayErrorWriter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import reactor.test.StepVerifier;
 class IpRateLimitFilterTest {
 
     private AtomicLong currentNanoTime;
+    private SimpleMeterRegistry meterRegistry;
     private IpRateLimitFilter filter;
 
     @BeforeEach
@@ -37,7 +39,8 @@ class IpRateLimitFilterTest {
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         currentNanoTime = new AtomicLong(1_000_000_000L);
-        filter = new IpRateLimitFilter(properties, new GatewayErrorWriter(mapper), currentNanoTime::get);
+        meterRegistry = new SimpleMeterRegistry();
+        filter = new IpRateLimitFilter(properties, new GatewayErrorWriter(mapper), currentNanoTime::get, meterRegistry);
     }
 
     @Test
@@ -73,6 +76,8 @@ class IpRateLimitFilterTest {
         MockServerWebExchange refilled = postWithIp("/api/auth/login", "10.0.0.1");
         StepVerifier.create(filter.filter(refilled, chain)).verifyComplete();
         assertThat(forwardedCount.get()).isEqualTo(4);
+        assertThat(meterRegistry.counter("livevote.gateway.ratelimit.rejected.total", "bucket", "auth").count())
+                .isEqualTo(1.0d);
     }
 
     @Test
@@ -102,6 +107,8 @@ class IpRateLimitFilterTest {
             assertThat(readExchange.getResponse().getStatusCode()).isNull();
         }
         assertThat(forwardedCount.get()).isEqualTo(8);
+        assertThat(meterRegistry.counter("livevote.gateway.ratelimit.rejected.total", "bucket", "vote").count())
+                .isEqualTo(1.0d);
     }
 
     private MockServerWebExchange postWithIp(String path, String ip) {

@@ -1,9 +1,12 @@
 package com.livevote.results.config;
 
+import com.livevote.results.event.ResultsEventConsumer;
 import com.livevote.results.exception.PollProjectionPendingException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
@@ -108,7 +111,8 @@ public class RabbitMqConfig {
             SimpleRabbitListenerContainerFactoryConfigurer configurer,
             ConnectionFactory connectionFactory,
             RabbitTemplate rabbitTemplate,
-            MessagingProperties properties
+            MessagingProperties properties,
+            MeterRegistry meterRegistry
     ) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         configurer.configure(factory, connectionFactory);
@@ -121,7 +125,7 @@ public class RabbitMqConfig {
                 true
         );
 
-        MessageRecoverer recoverer = createRecoverer(rabbitTemplate, properties);
+        MessageRecoverer recoverer = createRecoverer(rabbitTemplate, properties, meterRegistry);
 
         RetryOperationsInterceptor retryInterceptor = RetryInterceptorBuilder.stateless()
                 .retryPolicy(retryPolicy)
@@ -133,38 +137,57 @@ public class RabbitMqConfig {
         return factory;
     }
 
-    private MessageRecoverer createRecoverer(RabbitTemplate rabbitTemplate, MessagingProperties properties) {
+    private MessageRecoverer createRecoverer(
+            RabbitTemplate rabbitTemplate,
+            MessagingProperties properties,
+            MeterRegistry meterRegistry
+    ) {
         return (message, cause) -> {
-            if (hasCause(cause, AmqpRejectAndDontRequeueException.class)) {
-                throw (cause instanceof AmqpRejectAndDontRequeueException direct)
-                        ? direct
-                        : new AmqpRejectAndDontRequeueException("Poison message rejected to DLQ", cause);
-            }
-
-            String routingKey = message.getMessageProperties().getReceivedRoutingKey();
-            if (routingKey == null || routingKey.isBlank()) {
-                throw new AmqpRejectAndDontRequeueException("Missing routing key on failed message", cause);
-            }
-
-            if (hasCause(cause, PollProjectionPendingException.class)) {
-                int pendingAttempts = getHeaderInt(message, HEADER_PENDING_RETRIES);
-                if (pendingAttempts >= properties.getMaxPendingRetries()) {
-                    log.warn("Sending event to DLQ after {} pending projection retries, routingKey={}",
-                            pendingAttempts, routingKey);
-                    throw new AmqpRejectAndDontRequeueException("Exceeded max pending retries", cause);
+            String traceId = ResultsEventConsumer.extractTraceId(message);
+            try (MDC.MDCCloseable ignored = MDC.putCloseable(TraceIdFilter.MDC_TRACE_ID, traceId)) {
+                if (hasCause(cause, AmqpRejectAndDontRequeueException.class)) {
+                    throw (cause instanceof AmqpRejectAndDontRequeueException direct)
+                            ? direct
+                            : new AmqpRejectAndDontRequeueException("Poison message rejected to DLQ", cause);
                 }
-                int nextAttempt = pendingAttempts + 1;
-                Message retryMessage = copyWithHeader(message, HEADER_PENDING_RETRIES, nextAttempt);
-                rabbitTemplate.send(RETRY_EXCHANGE, routingKey, retryMessage);
-                log.info("Scheduled delayed retry {} for out-of-order event routingKey={}", nextAttempt, routingKey);
-                return;
-            }
 
-            int transientAttempts = getHeaderInt(message, HEADER_TRANSIENT_RETRIES) + 1;
-            Message retryMessage = copyWithHeader(message, HEADER_TRANSIENT_RETRIES, transientAttempts);
-            rabbitTemplate.send(RETRY_EXCHANGE, routingKey, retryMessage);
-            log.warn("Transient failure processing event routingKey={}; scheduled retry attempt={}",
-                    routingKey, transientAttempts, cause);
+                String routingKey = message.getMessageProperties().getReceivedRoutingKey();
+                if (routingKey == null || routingKey.isBlank()) {
+                    meterRegistry.counter("livevote.events.consumed.total",
+                            "routingKey", "unknown",
+                            "outcome", "dlq").increment();
+                    throw new AmqpRejectAndDontRequeueException("Missing routing key on failed message", cause);
+                }
+
+                if (hasCause(cause, PollProjectionPendingException.class)) {
+                    int pendingAttempts = getHeaderInt(message, HEADER_PENDING_RETRIES);
+                    if (pendingAttempts >= properties.getMaxPendingRetries()) {
+                        meterRegistry.counter("livevote.events.consumed.total",
+                                "routingKey", routingKey,
+                                "outcome", "dlq").increment();
+                        log.warn("Sending event to DLQ after {} pending projection retries, routingKey={}",
+                                pendingAttempts, routingKey);
+                        throw new AmqpRejectAndDontRequeueException("Exceeded max pending retries", cause);
+                    }
+                    int nextAttempt = pendingAttempts + 1;
+                    Message retryMessage = copyWithHeader(message, HEADER_PENDING_RETRIES, nextAttempt);
+                    rabbitTemplate.send(RETRY_EXCHANGE, routingKey, retryMessage);
+                    meterRegistry.counter("livevote.events.consumed.total",
+                            "routingKey", routingKey,
+                            "outcome", "retry").increment();
+                    log.info("Scheduled delayed retry {} for out-of-order event routingKey={}", nextAttempt, routingKey);
+                    return;
+                }
+
+                int transientAttempts = getHeaderInt(message, HEADER_TRANSIENT_RETRIES) + 1;
+                Message retryMessage = copyWithHeader(message, HEADER_TRANSIENT_RETRIES, transientAttempts);
+                rabbitTemplate.send(RETRY_EXCHANGE, routingKey, retryMessage);
+                meterRegistry.counter("livevote.events.consumed.total",
+                        "routingKey", routingKey,
+                        "outcome", "retry").increment();
+                log.warn("Transient failure processing event routingKey={}; scheduled retry attempt={}",
+                        routingKey, transientAttempts, cause);
+            }
         };
     }
 

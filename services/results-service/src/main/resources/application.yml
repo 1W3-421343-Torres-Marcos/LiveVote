@@ -9,10 +9,16 @@ spring:
     username: ${DB_USERNAME:results_user}
     password: ${DB_PASSWORD:results_dev_password}
     hikari:
-      connection-timeout: 5000
-      validation-timeout: 3000
+      connection-timeout: 3000
+      validation-timeout: 2000
+      keepalive-time: 60000
+      idle-timeout: 120000
+      max-lifetime: 300000
       maximum-pool-size: 10
       minimum-idle: 2
+      data-source-properties:
+        connectTimeout: 3
+        socketTimeout: 5
   jpa:
     hibernate:
       ddl-auto: validate
@@ -46,6 +52,30 @@ management:
     health:
       probes:
         enabled: true
+      show-components: always
+      show-details: never
       group:
         readiness:
-          include: readinessState,db
+          include: readinessState,db,rabbit
+          show-components: always
+          show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: ${spring.application.name}
+      rename:
+        "[@timestamp]": timestamp
+        logger_name: logger
+      exclude:
+        - "@version"
+        - level_value

@@ -1,5 +1,6 @@
 package com.livevote.results.event;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -9,11 +10,13 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.livevote.results.config.RabbitMqConfig;
+import com.livevote.results.config.TraceIdFilter;
 import com.livevote.results.dto.OptionResultResponse;
 import com.livevote.results.dto.PollResultsResponse;
 import com.livevote.results.entity.PollProjectionStatus;
 import com.livevote.results.service.ResultsProjectionService;
 import com.livevote.results.service.ResultsStreamService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
@@ -36,12 +40,14 @@ class ResultsEventConsumerTest {
     @Mock
     private ResultsStreamService resultsStreamService;
 
+    private SimpleMeterRegistry meterRegistry;
     private ResultsEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        consumer = new ResultsEventConsumer(objectMapper, projectionService, resultsStreamService);
+        meterRegistry = new SimpleMeterRegistry();
+        consumer = new ResultsEventConsumer(objectMapper, projectionService, resultsStreamService, meterRegistry);
     }
 
     @Test
@@ -92,12 +98,20 @@ class ResultsEventConsumerTest {
 
         verify(resultsStreamService).publishUpdate(updated);
         verify(resultsStreamService, never()).publishUpdate(null);
+        assertThat(MDC.get(TraceIdFilter.MDC_TRACE_ID)).isNull();
+        assertThat(meterRegistry.counter("livevote.events.consumed.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
+                "outcome", "processed").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.counter("livevote.events.consumed.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
+                "outcome", "duplicate").count()).isEqualTo(1.0d);
     }
 
     @Test
     void shouldRejectMalformedJsonUnsupportedVersionAndMissingFieldsToDlq() {
         assertThatThrownBy(() -> consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_VOTE_CAST, "{invalid-json")))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        assertThat(MDC.get(TraceIdFilter.MDC_TRACE_ID)).isNull();
 
         String wrongVersionJson = """
                 {
@@ -122,11 +136,13 @@ class ResultsEventConsumerTest {
 
         assertThatThrownBy(() -> consumer.onMessage(buildMessage("unknown.key", "{}")))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        assertThat(MDC.get(TraceIdFilter.MDC_TRACE_ID)).isNull();
     }
 
     private Message buildMessage(String routingKey, String body) {
         MessageProperties props = new MessageProperties();
         props.setReceivedRoutingKey(routingKey);
+        props.setHeader(TraceIdFilter.HEADER_TRACE_ID, "trace-results-1");
         return new Message(body.getBytes(StandardCharsets.UTF_8), props);
     }
 }

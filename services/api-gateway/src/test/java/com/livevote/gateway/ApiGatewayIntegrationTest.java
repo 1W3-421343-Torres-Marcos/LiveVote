@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.livevote.gateway.config.TraceIdFilter;
 import com.livevote.gateway.security.IdentityHeaderFilter;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -91,19 +92,22 @@ class ApiGatewayIntegrationTest {
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(401);
 
-        // 2. Protected route with valid JWT replaces spoofed X-User-Id with verified subject
+        // 2. Protected route with valid JWT replaces spoofed X-User-Id with verified subject and propagates X-Trace-Id
         UUID realUserId = UUID.randomUUID();
         String jwt = signToken(realUserId);
         gatewayClient.get()
                 .uri("/api/polls/mine")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt)
                 .header(IdentityHeaderFilter.HEADER_USER_ID, UUID.randomUUID().toString())
+                .header(TraceIdFilter.HEADER_TRACE_ID, "trace-gw-123")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectHeader().valueEquals(TraceIdFilter.HEADER_TRACE_ID, "trace-gw-123");
 
         JsonNode mineRequests = fetchWireMockRequests("/api/polls/mine");
         assertThat(mineRequests).hasSize(1);
         assertThat(mineRequests.get(0).get("headers").get("X-User-Id").asText()).isEqualTo(realUserId.toString());
+        assertThat(mineRequests.get(0).get("headers").get("X-Trace-Id").asText()).isEqualTo("trace-gw-123");
 
         // 3. Public route strips spoofed X-User-Id before forwarding
         gatewayClient.get()
@@ -155,13 +159,36 @@ class ApiGatewayIntegrationTest {
                 .jsonPath("$.status").isEqualTo(503)
                 .jsonPath("$.path").isEqualTo("/api/results/failing");
 
-        // 7. Actuator readiness probe returns UP
+        // 7. Actuator liveness, readiness, and Golden Signals metrics
+        gatewayClient.get()
+                .uri("/actuator/health/liveness")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .value(body -> assertThat(body).containsEntry("status", "UP"));
+
         gatewayClient.get()
                 .uri("/actuator/health/readiness")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new ParameterizedTypeReference<Map<String, Object>>() {})
-                .value(body -> assertThat(body).containsEntry("status", "UP"));
+                .value(body -> {
+                    assertThat(body).containsEntry("status", "UP");
+                    assertThat(body).containsKey("components");
+                });
+
+        gatewayClient.get()
+                .uri("/actuator/metrics/http.server.requests")
+                .exchange()
+                .expectStatus().isOk();
+
+        gatewayClient.get()
+                .uri("/actuator/metrics/livevote.gateway.fallback.total")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.measurements[0].value").value(value ->
+                        assertThat(((Number) value).doubleValue()).isGreaterThanOrEqualTo(1.0d));
     }
 
     private void stub(String method, String path, int status, String responseBody) {

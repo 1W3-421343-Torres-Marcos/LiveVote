@@ -6,10 +6,13 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -61,6 +64,19 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return buildResponse(HttpStatus.CONFLICT, "Resource conflict", request.getRequestURI());
+    }
+
+    @ExceptionHandler({
+            CannotCreateTransactionException.class,
+            TransientDataAccessException.class,
+            DataAccessResourceFailureException.class
+    })
+    public ResponseEntity<ApiErrorResponse> handleDatabaseUnavailable(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        log.error("Database unavailable while processing path={}", request.getRequestURI(), ex);
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "Database temporarily unavailable", request.getRequestURI());
     }
 
     @ExceptionHandler(Exception.class)

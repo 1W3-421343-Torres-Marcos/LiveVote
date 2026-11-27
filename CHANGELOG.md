@@ -4,6 +4,22 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-27
+
+### Agregado
+
+- Logging JSON estructurado nativo (`logstash` en Spring Boot `3.4.3`) en `api-gateway`, `votes-service` y `results-service` con campos `timestamp`, `level`, `service`, `traceId`, `logger` y `message` (sin loguear contraseñas, hashes, `JWT_SECRET` ni tokens JWT).
+- Propagación distribuida de `traceId` de extremo a extremo (`Gateway -> votes-service -> RabbitMQ -> results-service`) mediante `TraceIdFilter` en los tres servicios (validación `^[A-Za-z0-9_-]{1,64}$` o generación 32 hex, deduplicación `beforeCommit` de `X-Trace-Id` en `api-gateway` y cabeceras AMQP `X-Trace-Id`/`traceId` sin `__TypeId__`).
+- Probes Actuator (`/actuator/health/liveness`, `/actuator/health/readiness` con `db`, `rabbit` y `readinessState` por servicio) y métricas Golden Signals (`http.server.requests` con histogramas, `livevote.gateway.fallback.total`, `livevote.gateway.ratelimit.rejected.total`, `livevote.events.published.total`, `livevote.events.consumed.total`, `livevote.sse.active.channels`, `livevote.sse.active.subscribers` y `hikaricp.connections.active`).
+- Runbook reproducible y evidencia verificada de observabilidad, **Demo (c)** y **Demo (d)** en [docs/demos.md](./docs/demos.md) + plan de cierre [docs/plans/F6-observability-resilience.md](./docs/plans/F6-observability-resilience.md).
+- Tests unitarios y de integración actualizados (`13/13` en `api-gateway`, `19/19` en `votes-service`, `19/19` en `results-service` y regresión `14/14` + `ng build` en `frontend`).
+
+### Cambiado
+
+- Endurecimiento de HikariCP (`connection-timeout: 3000`, `validation-timeout: 2000`, `keepalive-time: 60000`, `idle-timeout: 120000`, `max-lifetime: 300000`, `connectTimeout=3`, `socketTimeout=5`) en `votes-service` y `results-service`, más manejo HTTP `503 Service Unavailable` ante caída de base de datos en `GlobalExceptionHandler` de `votes-service`.
+- Resolución del fallo en frío detectado en F5 mediante inicialización AMQP en `ApplicationReadyEvent` (`ObjectProvider<AmqpAdmin>`) en `votes-service` y ampliación de `TimeLimiter` (`5 s`) / `response-timeout` (`6 s`) en `api-gateway`.
+- Alineación de versiones Maven y npm a `0.6.0` en `services/api-gateway/pom.xml`, `services/votes-service/pom.xml`, `services/results-service/pom.xml` y `frontend/package.json`.
+
 ## [0.5.0] - 2026-11-27
 
 ### Agregado

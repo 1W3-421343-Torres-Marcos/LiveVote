@@ -3,6 +3,9 @@ package com.livevote.results.service;
 import com.livevote.results.config.SseProperties;
 import com.livevote.results.dto.HeartbeatEvent;
 import com.livevote.results.dto.PollResultsResponse;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -38,12 +41,17 @@ public class ResultsStreamService {
     private final ConcurrentHashMap<UUID, PollStreamChannel> channels = new ConcurrentHashMap<>();
 
     @Autowired
-    public ResultsStreamService(ResultsProjectionService projectionService, SseProperties sseProperties) {
+    public ResultsStreamService(
+            ResultsProjectionService projectionService,
+            SseProperties sseProperties,
+            MeterRegistry meterRegistry
+    ) {
         this(
                 projectionService,
                 Duration.ofMillis(sseProperties.getHeartbeatIntervalMs()),
                 sseProperties.getClientBufferSize(),
-                null
+                null,
+                meterRegistry
         );
     }
 
@@ -52,6 +60,16 @@ public class ResultsStreamService {
             Duration heartbeatInterval,
             int clientBufferSize,
             Scheduler heartbeatScheduler
+    ) {
+        this(projectionService, heartbeatInterval, clientBufferSize, heartbeatScheduler, new SimpleMeterRegistry());
+    }
+
+    ResultsStreamService(
+            ResultsProjectionService projectionService,
+            Duration heartbeatInterval,
+            int clientBufferSize,
+            Scheduler heartbeatScheduler,
+            MeterRegistry meterRegistry
     ) {
         if (heartbeatInterval == null || heartbeatInterval.isZero() || heartbeatInterval.isNegative()) {
             throw new IllegalArgumentException("SSE heartbeat interval must be positive");
@@ -63,6 +81,13 @@ public class ResultsStreamService {
         this.heartbeatInterval = heartbeatInterval;
         this.clientBufferSize = clientBufferSize;
         this.heartbeatScheduler = heartbeatScheduler;
+
+        Gauge.builder("livevote.sse.active.channels", this, ResultsStreamService::activePollChannelCount)
+                .description("Number of active poll SSE channels")
+                .register(meterRegistry);
+        Gauge.builder("livevote.sse.active.subscribers", this, ResultsStreamService::activeTotalSubscriberCount)
+                .description("Total number of active SSE subscribers")
+                .register(meterRegistry);
     }
 
     /**
@@ -144,6 +169,12 @@ public class ResultsStreamService {
 
     public int activePollChannelCount() {
         return channels.size();
+    }
+
+    public int activeTotalSubscriberCount() {
+        return channels.values().stream()
+                .mapToInt(channel -> channel.subscribers.get())
+                .sum();
     }
 
     private PollStreamChannel acquireChannel(UUID pollId) {

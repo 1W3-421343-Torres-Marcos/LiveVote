@@ -43,7 +43,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/metrics", "/actuator/metrics/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/polls/mine").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/polls/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/polls/*/votes").permitAll()

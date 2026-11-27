@@ -46,6 +46,7 @@ api-gateway (Spring Cloud Gateway: JWT, X-User-Id, rate limit IP, Circuit Breake
 ├── .github/workflows/       # Pipelines CI/CD por ruta modificada (F7)
 ├── docs/
 │   ├── PLAN.md              # Plan maestro, bitácora y checklists F0–F9
+│   ├── demos.md             # Guión y evidencia de demostraciones (F6/F9)
 │   └── plans/               # Planes detallados de implementación por fase
 ├── frontend/                # SPA Angular standalone + nginx (F5)
 ├── services/
@@ -98,7 +99,7 @@ docker compose up --build
 | **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ✅ Completada (`v0.3.0`) |
 | **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ✅ Completada (`v0.4.0`) |
 | **F5** | Frontend Angular standalone + `nginx` | ✅ Completada (`v0.5.0`) |
-| **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ⏳ Siguiente |
-| **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ⬜ Pendiente |
+| **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ✅ Completada (`v0.6.0`) |
+| **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ⏳ Siguiente |
 | **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⬜ Pendiente |
 | **F9** | Demos (a)–(d) documentadas, README final y mejoras opcionales | ⬜ Pendiente |

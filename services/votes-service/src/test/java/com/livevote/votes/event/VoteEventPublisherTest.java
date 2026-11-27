@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.livevote.votes.config.RabbitMqConfig;
+import com.livevote.votes.config.TraceIdFilter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
@@ -30,6 +33,7 @@ class VoteEventPublisherTest {
     private RabbitTemplate rabbitTemplate;
 
     private ObjectMapper objectMapper;
+    private SimpleMeterRegistry meterRegistry;
     private VoteEventPublisher publisher;
 
     @BeforeEach
@@ -37,11 +41,12 @@ class VoteEventPublisherTest {
         objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        publisher = new VoteEventPublisher(rabbitTemplate, objectMapper);
+        meterRegistry = new SimpleMeterRegistry();
+        publisher = new VoteEventPublisher(rabbitTemplate, objectMapper, meterRegistry);
     }
 
     @Test
-    void onPollCreatedShouldSendVersionedJsonWithoutOwnerOrTypeHeaders() throws Exception {
+    void onPollCreatedShouldSendVersionedJsonWithTraceIdWithoutOwnerOrTypeHeaders() throws Exception {
         UUID pollId = UUID.randomUUID();
         UUID optionId = UUID.randomUUID();
         PollCreatedEvent event = new PollCreatedEvent(
@@ -52,7 +57,12 @@ class VoteEventPublisherTest {
                 Instant.parse("2026-11-26T12:00:00Z")
         );
 
-        publisher.onPollCreated(event);
+        MDC.put(TraceIdFilter.MDC_TRACE_ID, "trace-vote-123");
+        try {
+            publisher.onPollCreated(event);
+        } finally {
+            MDC.remove(TraceIdFilter.MDC_TRACE_ID);
+        }
 
         ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
         verify(rabbitTemplate).send(
@@ -65,6 +75,11 @@ class VoteEventPublisherTest {
         assertThat(sent.getMessageProperties().getContentType()).isEqualTo(MessageProperties.CONTENT_TYPE_JSON);
         assertThat(sent.getMessageProperties().getDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
         assertThat(sent.getMessageProperties().getHeaders()).doesNotContainKey("__TypeId__");
+        assertThat(sent.getMessageProperties().getHeaders()).containsEntry(TraceIdFilter.HEADER_TRACE_ID, "trace-vote-123");
+        assertThat(sent.getMessageProperties().getHeaders()).containsEntry(TraceIdFilter.MDC_TRACE_ID, "trace-vote-123");
+        assertThat(meterRegistry.counter("livevote.events.published.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_POLL_CREATED,
+                "outcome", "success").count()).isEqualTo(1.0d);
 
         JsonNode json = objectMapper.readTree(sent.getBody());
         assertThat(json.get("eventVersion").asInt()).isEqualTo(1);

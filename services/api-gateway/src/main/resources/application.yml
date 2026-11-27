@@ -8,7 +8,7 @@ spring:
     gateway:
       httpclient:
         connect-timeout: 3000
-        response-timeout: 5s
+        response-timeout: 6s
       routes:
         - id: votes-auth
           uri: ${app.upstream.votes-url}
@@ -82,3 +82,30 @@ management:
     health:
       probes:
         enabled: true
+      show-components: always
+      show-details: never
+      group:
+        readiness:
+          include: readinessState
+          show-components: always
+          show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: ${spring.application.name}
+      rename:
+        "[@timestamp]": timestamp
+        logger_name: logger
+      exclude:
+        - "@version"
+        - level_value

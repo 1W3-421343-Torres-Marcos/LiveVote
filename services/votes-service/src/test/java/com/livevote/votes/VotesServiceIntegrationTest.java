@@ -170,15 +170,19 @@ class VotesServiceIntegrationTest {
             assertThat(publicPollResp.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(publicPollResp.getBody().title()).isEqualTo("Best backend language?");
 
-            // 6. Anonymous voting: 201 (publishes VoteCast), 409 duplicate device (no event), 404 unknown option
+            // 6. Anonymous voting: 201 (publishes VoteCast with X-Trace-Id), 409 duplicate device, 404 unknown option
             UUID chosenOptionId = createdPoll.options().get(0).id();
             String deviceId = UUID.randomUUID().toString();
+            HttpHeaders traceHeaders = new HttpHeaders();
+            traceHeaders.set("X-Trace-Id", "trace-votes-e2e-1");
 
-            ResponseEntity<VoteResponse> voteResp = restTemplate.postForEntity(
+            ResponseEntity<VoteResponse> voteResp = restTemplate.exchange(
                     "/api/polls/" + createdPoll.id() + "/votes",
-                    new CastVoteRequest(chosenOptionId, deviceId),
+                    HttpMethod.POST,
+                    new HttpEntity<>(new CastVoteRequest(chosenOptionId, deviceId), traceHeaders),
                     VoteResponse.class);
             assertThat(voteResp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            assertThat(voteResp.getHeaders().getFirst("X-Trace-Id")).isEqualTo("trace-votes-e2e-1");
             assertThat(voteResp.getBody()).isNotNull();
             assertThat(voteResp.getBody().pollId()).isEqualTo(createdPoll.id());
 
@@ -186,6 +190,8 @@ class VotesServiceIntegrationTest {
             assertThat(voteCastMsg).isNotNull();
             assertThat(voteCastMsg.getMessageProperties().getReceivedRoutingKey())
                     .isEqualTo(RabbitMqConfig.ROUTING_KEY_VOTE_CAST);
+            assertThat(voteCastMsg.getMessageProperties().getHeaders())
+                    .containsEntry("X-Trace-Id", "trace-votes-e2e-1");
             JsonNode voteCastJson = objectMapper.readTree(voteCastMsg.getBody());
             assertThat(voteCastJson.get("eventVersion").asInt()).isEqualTo(1);
             assertThat(voteCastJson.get("voteId").asText()).isEqualTo(voteResp.getBody().voteId().toString());
@@ -234,7 +240,15 @@ class VotesServiceIntegrationTest {
             // Rejected/failed votes must never publish events
             assertThat(rabbitTemplate.receive(testQueueName, 300)).isNull();
 
-            // 8. Readiness probe reflects healthy postgres-votes DB
+            // 8. Actuator liveness, readiness (db + rabbit), and Golden Signals metrics
+            ResponseEntity<Map<String, Object>> livenessResp = restTemplate.exchange(
+                    "/actuator/health/liveness",
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<>() {});
+            assertThat(livenessResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(livenessResp.getBody()).containsEntry("status", "UP");
+
             ResponseEntity<Map<String, Object>> readinessResp = restTemplate.exchange(
                     "/actuator/health/readiness",
                     HttpMethod.GET,
@@ -242,6 +256,23 @@ class VotesServiceIntegrationTest {
                     new ParameterizedTypeReference<>() {});
             assertThat(readinessResp.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(readinessResp.getBody()).containsEntry("status", "UP");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> components = (Map<String, Object>) readinessResp.getBody().get("components");
+            assertThat(components).containsKeys("db", "rabbit");
+
+            ResponseEntity<Map<String, Object>> httpMetricsResp = restTemplate.exchange(
+                    "/actuator/metrics/http.server.requests",
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<>() {});
+            assertThat(httpMetricsResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+            ResponseEntity<Map<String, Object>> publishMetricsResp = restTemplate.exchange(
+                    "/actuator/metrics/livevote.events.published.total",
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<>() {});
+            assertThat(publishMetricsResp.getStatusCode()).isEqualTo(HttpStatus.OK);
         } finally {
             amqpAdmin.deleteQueue(testQueueName);
         }

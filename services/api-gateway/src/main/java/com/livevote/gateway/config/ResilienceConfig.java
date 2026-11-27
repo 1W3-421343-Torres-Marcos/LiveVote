@@ -26,7 +26,7 @@ public class ResilienceConfig {
                 .build();
 
         TimeLimiterConfig timeLimiterConfig = TimeLimiterConfig.custom()
-                .timeoutDuration(Duration.ofSeconds(4))
+                .timeoutDuration(Duration.ofSeconds(5))
                 .build();
 
         return factory -> factory.configureDefault(id -> new Resilience4JConfigBuilder(id)
