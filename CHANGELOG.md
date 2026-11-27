@@ -4,6 +4,19 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-27
+
+### Agregado
+
+- Overlay productivo [docker-compose.prod.yml](./docker-compose.prod.yml) con consumo exclusivo de imágenes fijas en GHCR (`APP_VERSION`), secretos obligatorios (`${VAR:?...}`), rotación de logs `json-file`, `restart: unless-stopped`, `mem_limit` calibrados (`1952 MiB` en 7 servicios base), perfil opcional `tls` (`caddy:2.8.4-alpine` + [deploy/Caddyfile](./deploy/Caddyfile) con `flush_interval -1`) y exposición de puertos limitada a `frontend`/Caddy.
+- Script de respaldo separado [scripts/backup-postgres.sh](./scripts/backup-postgres.sh) (`pg_dump -Fc` + validación con `pg_restore --list` y retención por `RETENTION_DAYS`) y smoke tests post-despliegue [scripts/smoke-test.sh](./scripts/smoke-test.sh) y [scripts/smoke-test.ps1](./scripts/smoke-test.ps1) (`9` aserciones incluyendo rechazo `401` ante `X-User-Id` falsificado y stream SSE).
+- Runbook operativo [docs/runbook-prod.md](./docs/runbook-prod.md) con tabla real de RAM (`1143.28 MiB` medidos sobre `docker stats --no-stream`) y guía por tamaños de instancia (`1 GB` / `2 GB` / `4 GB+`), más plan de cierre [docs/plans/F8-production-deploy.md](./docs/plans/F8-production-deploy.md).
+
+### Cambiado
+
+- Ajuste de [.env.prod.example](./.env.prod.example) con `APP_VERSION=0.8.0`, `PROD_HTTP_BIND`, `RETENTION_DAYS` y `*_JAVA_OPTS=-XX:MaxRAMPercentage=60.0` calibrados para Distroless en ~2 GB RAM.
+- Alineación de versiones Maven y npm a `0.8.0` en `services/votes-service/pom.xml`, `services/results-service/pom.xml`, `services/api-gateway/pom.xml` y `frontend/package.json`.
+
 ## [0.7.1] - 2026-11-27
 
 ### Corregido

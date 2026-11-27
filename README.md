@@ -43,16 +43,22 @@ api-gateway (Spring Cloud Gateway: JWT, X-User-Id, rate limit IP, Circuit Breake
 ```text
 .
 ├── .agents/skills/          # Skills específicas del proyecto para agentes
-├── .github/workflows/       # Pipelines CI/CD por ruta modificada (F7)
+├── .github/workflows/       # Pipelines CI/CD por ruta modificada + release (F7)
+├── deploy/                  # Caddyfile para terminación TLS opcional (F8)
 ├── docs/
 │   ├── PLAN.md              # Plan maestro, bitácora y checklists F0–F9
 │   ├── demos.md             # Guión y evidencia de demostraciones (F6/F9)
+│   ├── runbook-prod.md      # Runbook de producción, RAM, TLS y backups (F8)
 │   └── plans/               # Planes detallados de implementación por fase
 ├── frontend/                # SPA Angular standalone + nginx (F5)
+├── scripts/                 # Scripts operativos: backups pg_dump y smoke tests (F8)
 ├── services/
 │   ├── api-gateway/         # Spring Cloud Gateway + Resilience4j (F3)
 │   ├── votes-service/       # Escritura: identity + polls + votes (F1)
 │   └── results-service/     # Lectura + SSE: WebFlux + JPA + AMQP (F2/F4)
+├── docker-compose.yml       # Orquestación base de los 7 contenedores
+├── docker-compose.override.yml # Puertos y credenciales locales de desarrollo
+├── docker-compose.prod.yml  # Overlay de producción: GHCR, mem_limit y perfil TLS (F8)
 ├── .env.example             # Variables de entorno para desarrollo local
 ├── .env.prod.example        # Plantilla sin credenciales para producción
 ├── AGENTS.md                # Reglas de arquitectura y convenciones
@@ -101,5 +107,5 @@ docker compose up --build
 | **F5** | Frontend Angular standalone + `nginx` | ✅ Completada (`v0.5.0`) |
 | **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ✅ Completada (`v0.6.0`) |
 | **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ✅ Completada (`v0.7.0`) |
-| **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⏳ Siguiente |
-| **F9** | Demos (a)–(d) documentadas, README final y mejoras opcionales | ⬜ Pendiente |
+| **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ✅ Completada (`v0.8.0`) |
+| **F9** | Demos (a)–(d) documentadas, README final y mejoras opcionales | ⏳ Siguiente |

@@ -1,0 +1,122 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+services:
+  postgres-votes:
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_VOTES_DB:?POSTGRES_VOTES_DB is required}
+      POSTGRES_USER: ${POSTGRES_VOTES_USER:?POSTGRES_VOTES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_VOTES_PASSWORD:?POSTGRES_VOTES_PASSWORD is required}
+
+  postgres-results:
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_RESULTS_DB:?POSTGRES_RESULTS_DB is required}
+      POSTGRES_USER: ${POSTGRES_RESULTS_USER:?POSTGRES_RESULTS_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_RESULTS_PASSWORD:?POSTGRES_RESULTS_PASSWORD is required}
+
+  rabbitmq:
+    restart: unless-stopped
+    mem_limit: 224m
+    logging: *default-logging
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:?RABBITMQ_VHOST is required}
+
+  votes-service:
+    build: !reset null
+    image: ghcr.io/1w3-421343-torres-marcos/livevote-votes-service:${APP_VERSION:?APP_VERSION is required}
+    pull_policy: always
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *default-logging
+    environment:
+      DB_URL: jdbc:postgresql://postgres-votes:5432/${POSTGRES_VOTES_DB:?POSTGRES_VOTES_DB is required}
+      DB_USERNAME: ${POSTGRES_VOTES_USER:?POSTGRES_VOTES_USER is required}
+      DB_PASSWORD: ${POSTGRES_VOTES_PASSWORD:?POSTGRES_VOTES_PASSWORD is required}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:?RABBITMQ_VHOST is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:?JWT_EXPIRATION_SECONDS is required}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_TOOL_OPTIONS: ${VOTES_JAVA_OPTS:--XX:MaxRAMPercentage=60.0}
+
+  results-service:
+    build: !reset null
+    image: ghcr.io/1w3-421343-torres-marcos/livevote-results-service:${APP_VERSION:?APP_VERSION is required}
+    pull_policy: always
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *default-logging
+    environment:
+      DB_URL: jdbc:postgresql://postgres-results:5432/${POSTGRES_RESULTS_DB:?POSTGRES_RESULTS_DB is required}
+      DB_USERNAME: ${POSTGRES_RESULTS_USER:?POSTGRES_RESULTS_USER is required}
+      DB_PASSWORD: ${POSTGRES_RESULTS_PASSWORD:?POSTGRES_RESULTS_PASSWORD is required}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:?RABBITMQ_VHOST is required}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_TOOL_OPTIONS: ${RESULTS_JAVA_OPTS:--XX:MaxRAMPercentage=60.0}
+
+  api-gateway:
+    build: !reset null
+    image: ghcr.io/1w3-421343-torres-marcos/livevote-api-gateway:${APP_VERSION:?APP_VERSION is required}
+    pull_policy: always
+    restart: unless-stopped
+    mem_limit: 384m
+    logging: *default-logging
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_TOOL_OPTIONS: ${GATEWAY_JAVA_OPTS:--XX:MaxRAMPercentage=60.0}
+
+  frontend:
+    build: !reset null
+    image: ghcr.io/1w3-421343-torres-marcos/livevote-frontend:${APP_VERSION:?APP_VERSION is required}
+    pull_policy: always
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *default-logging
+    ports:
+      - "${PROD_HTTP_BIND:-0.0.0.0:80}:80"
+
+  caddy:
+    profiles: ["tls"]
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *default-logging
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN is required when tls profile is enabled}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s

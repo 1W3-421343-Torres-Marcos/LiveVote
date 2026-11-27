@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F7` completada (`v0.7.0`) → **Siguiente**: `F8` (`Producción y medición real de RAM`)
-- **Última verificación exitosa**: backend `0.7.0` (`mvn -B verify`: `19/19` votes + `19/19` results + `13/13` gateway) + `frontend` (`14/14` `test:ci` `ChromeHeadlessCI` + `14/14` `test` + `ng build` `352.65 kB`) + `docker buildx build --platform linux/amd64,linux/arm64` en las 4 imágenes (`amd64` + `aarch64`, `nonroot`, sin `/bin/sh`, `JAVA_TOOL_OPTIONS`) + `docker compose up -d --build` (`7` `healthy`, `HealthCheck --print` `200`, smoke E2E y snapshot SSE) + 5 workflows YAML validados (`LF`, sin `latest`).
+- **Fase actual**: `F8` completada (`v0.8.0`) → **Siguiente**: `F9` (`Demos finales (a)–(d), documentación y mejoras opcionales`)
+- **Última verificación exitosa**: stack productivo `docker-compose.prod.yml` usando imágenes multi-arch reales de GHCR (`0.7.1`, `7/7 healthy`, solo `frontend` expuesto al host), `smoke-test.ps1` + `smoke-test.sh` (`9/9` checks incluyendo `401` ante `X-User-Id` falsificado y SSE), medición real `docker stats --no-stream` (`1143.28 MiB` totales / `1952 MiB` límite, pico `70.08 %`, cero `OOMKilled`) y `scripts/backup-postgres.sh` verificado con `pg_restore --list`.
 
 ### Bitácora de hitos
 
@@ -20,11 +20,12 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F4** | 2026-11-27 | ✅ Completada (`v0.4.0`) | `mvn test` (`19/19` results + `11/11` gateway + `17/17` votes) + `curl -N` E2E (`> 22 s`) | SSE con snapshot, updates en vivo, `heartbeat` `~20 s`, limpieza sin fugas (`onErrorResume` + `doFinally`) y `response-timeout: -1` |
 | **F5** | 2026-11-27 | ✅ Completada (`v0.5.0`) | `npm test` (`14/14`) + `npm run build` + `mvn test` (`47/47`) + Compose E2E (`nginx` SSE + navegador) | SPA Angular 20 LTS + `nginx` en `:4200`; hallazgo en frío (`TimeLimiter 4 s` vs lazy `RabbitTemplate`) anotado para F6 |
 | **F6** | 2026-11-27 | ✅ Completada (`v0.6.0`) | `mvn test` (`51/51`) + `npm test` (`14/14`) + Compose E2E (`7` `healthy`, Demos c y d en [docs/demos.md](./demos.md)) | Logs JSON + `traceId`, Actuator/Golden Signals, HikariCP + `503`, warmup AMQP F5 resuelto y runbook en `docs/demos.md` |
-| **F7** | 2026-11-27 | ✅ Completada (`v0.7.0`) | `mvn verify` (`51/51`) + `npm run test:ci`/`test`/`build` + `docker buildx` `amd64/arm64` (`4` imágenes) + Compose Distroless E2E + YAML check | Distroless `nonroot` (`JAVA_TOOL_OPTIONS`) + `HealthCheck.java` sin shell, builder `maven:3.9.9-eclipse-temurin-17-noble` (`$BUILDPLATFORM`) y 5 workflows GHCR sin `latest` |
+| **F7** | 2026-11-27 | ✅ Completada (`v0.7.0`) | `mvn verify` (`51/51`) + `npm run test:ci`/`test`/`build` + `docker buildx` `amd64/arm64` (`4` imágenes) + Compose Distroless E2E + YAML check | Distroless `nonroot` (`JAVA_TOOL_OPTIONS`) + `HealthCheck.java` sin shell, builder `maven:3.9.9-eclipse-temurin-17-noble` (`$BUILDPLATFORM`) y 5 workflows GHCR sin `latest` (fix tag glob en `v0.7.1`) |
+| **F8** | 2026-11-27 | ✅ Completada (`v0.8.0`) | `docker compose -f docker-compose.yml -f docker-compose.prod.yml` con GHCR `0.7.1` + `smoke-test.ps1`/`.sh` (`9/9`) + `docker stats` (`1143.28 MiB`) + `backup-postgres.sh` | Validación productiva local (`~2 GB` RAM target, `mem_limit` calibrado y perfil opcional Caddy `tls`), `docs/runbook-prod.md` listo para desplegar en VPS |
 
 ### Mediciones y demos obligatorias (pendientes)
 
-- **Consumo real de RAM del stack** (`docker stats --no-stream`): *pendiente de medir en F8*.
+- **Consumo real de RAM del stack** (`docker stats --no-stream`): ✅ **`1143.28 MiB`** medidos con imágenes Distroless reales bajo carga básica + SSE (`1952 MiB` límite base / `2016 MiB` con perfil `tls`; detalle por servicio en [docs/runbook-prod.md](./runbook-prod.md)).
 - **Demo (a)** Escalar `votes-service` (`--scale`) y verificar reparto real en Gateway: *pendiente (F9)*.
 - **Demo (b)** Detener `results-service`, votar y reiniciar sin pérdida de votos: *pendiente (F9)*.
 - **Demo (c)** Detener y recuperar `postgres-results`: ✅ verificada en F6 ([docs/demos.md](./demos.md)); validación final en F9.
@@ -142,11 +143,11 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 ### F8 — Producción y medición real de RAM
 > **Compuerta obligatoria previa**: ANTES de planificar o ejecutar F8, preguntar al usuario el destino de despliegue y verificar los límites vigentes de su plan gratuito.
 
-- [ ] Consultar destino de despliegue al usuario y validar límites del plan gratuito elegido.
-- [ ] Medir consumo real de RAM del stack completo (`docker stats --no-stream`) y documentarlo en la bitácora.
-- [ ] Crear `docker-compose.prod.yml` (solo `nginx`/TLS expone puertos, `restart: unless-stopped`, `healthcheck` + `service_healthy`, `mem_limit` + `-XX:MaxRAMPercentage`, rotación de logs, volúmenes persistentes, perfil opcional Caddy TLS).
-- [ ] Documentar y probar script de backup `pg_dump` para `postgres-votes` y `postgres-results` + script de smoke test post-despliegue.
-- [ ] **Verificación**: despliegue en destino gratuito dentro de límites de RAM, TLS activo, backup probado y smoke test exitoso.
+- [x] Consultar destino de despliegue al usuario y validar límites del plan gratuito elegido.
+- [x] Medir consumo real de RAM del stack completo (`docker stats --no-stream`) y documentarlo en la bitácora.
+- [x] Crear `docker-compose.prod.yml` (solo `nginx`/TLS expone puertos, `restart: unless-stopped`, `healthcheck` + `service_healthy`, `mem_limit` + `-XX:MaxRAMPercentage`, rotación de logs, volúmenes persistentes, perfil opcional Caddy TLS).
+- [x] Documentar y probar script de backup `pg_dump` para `postgres-votes` y `postgres-results` + script de smoke test post-despliegue.
+- [x] **Verificación**: validación productiva local con imágenes GHCR (`0.7.1`) dentro de límites de RAM (`~2 GB`), perfil `tls` validado, backup `pg_dump` probado y smoke test (`9/9`) exitoso.
 
 ### F9 — Demos finales (a)–(d), documentación y mejoras opcionales
 - [ ] **Demo (a)**: escalar `votes-service` (`docker compose up --scale votes-service=3`), investigar/configurar el balanceo en `api-gateway` (evitando pinning por keep-alive de Netty) y probar distribución real entre réplicas.

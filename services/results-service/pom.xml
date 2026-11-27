@@ -13,7 +13,7 @@
 
     <groupId>com.livevote</groupId>
     <artifactId>results-service</artifactId>
-    <version>0.7.0</version>
+    <version>0.8.0</version>
     <name>results-service</name>
     <description>LiveVote read and real-time projection service</description>
 
