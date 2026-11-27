@@ -9,6 +9,7 @@ import com.livevote.votes.entity.PollEntity;
 import com.livevote.votes.entity.PollOptionEntity;
 import com.livevote.votes.entity.PollStatus;
 import com.livevote.votes.entity.VoteEntity;
+import com.livevote.votes.event.PollClosedEvent;
 import com.livevote.votes.event.PollCreatedEvent;
 import com.livevote.votes.event.PollCreatedOptionEvent;
 import com.livevote.votes.event.VoteCastEvent;
@@ -109,6 +110,11 @@ public class PollService {
 
         poll.close(Instant.now());
         PollEntity savedPoll = pollRepository.save(poll);
+        eventPublisher.publishEvent(new PollClosedEvent(
+                EVENT_VERSION,
+                savedPoll.getId(),
+                savedPoll.getClosedAt()
+        ));
         List<PollOptionEntity> options = pollOptionRepository.findAllByPollIdOrderByDisplayOrderAsc(pollId);
         return toPollResponse(savedPoll, options);
     }

@@ -31,15 +31,91 @@ Guía reproducible para ejecutar las demostraciones de resiliencia y observabili
 
 ---
 
-## Demo (a) — Votación en vivo y actualización SSE
+## Demo (a) — Escalado horizontal de `votes-service` (`--scale votes-service=3`)
 
-*Pendiente — Fase F9 (demostración integral del flujo en vivo).*
+Demuestra que el balanceo en `api-gateway` (`UpstreamClientConfig` con `roundRobinSelection(true)` + `cacheMaxTimeToLive(5 s)` y `spring.cloud.gateway.httpclient.pool.type: disabled` para evitar pinning TCP por keep-alive) distribuye tráfico real entre múltiples réplicas de `votes-service`.
+
+### Pasos reproducibles
+
+1. **Levantar con 3 réplicas de `votes-service`**:
+
+   ```bash
+   docker compose up -d --build --scale votes-service=3
+   docker compose ps
+   ```
+
+   Deben figurar **9 contenedores** en estado `healthy` (`votes-service-1`, `votes-service-2`, `votes-service-3`, más `results-service`, `api-gateway`, `frontend`, `rabbitmq`, `postgres-votes`, `postgres-results`).
+
+2. **Emitir ráfaga secuencial de consultas y votos inspeccionando `X-Instance-Id`**:
+
+   ```powershell
+   1..12 | ForEach-Object {
+     (Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:4200/api/polls/$pollId").Headers['X-Instance-Id']
+   }
+   ```
+
+3. **Contrastarlo con logs de cada réplica**: confirmar líneas JSON en `docker logs plataformavotacion-votes-service-{1,2,3}` con `instance=<id>` y coincidencia con los UUID atendidos.
+
+### Evidencia verificada (F9)
+
+- 9/9 contenedores `healthy` bajo `docker compose up -d --build --scale votes-service=3`.
+- Sobre 15 solicitudes secuenciales (`12` lecturas `GET /api/polls/{pollId}` + `3` votos `POST .../votes`):
+  - **3 réplicas distintas** respondieron con cabecera `X-Instance-Id`:
+    - `5407a2cff143` (`votes-service-3`): `9` solicitudes (`matchedRequests=9` en logs del contenedor)
+    - `5eab0306f2ab` (`votes-service-2`): `3` solicitudes (`matchedRequests=3` en logs del contenedor)
+    - `fbd77f45ba59` (`votes-service-1`): `3` solicitudes (`matchedRequests=3` en logs del contenedor)
 
 ---
 
-## Demo (b) — Prevención de voto duplicado y cierre de encuesta
+## Demo (b) — Caída y autorrecuperación de `results-service` + `PollClosed` en vivo por SSE
 
-*Pendiente — Fase F9.*
+Demuestra que si cae el servicio consumidor (`results-service`), `votes-service` continúa aceptando votos (`201`) sin perder eventos ni enviar mensajes a DLQ, mientras `api-gateway` responde `503` controlado en lecturas, y al reiniciar `results-service` concilia conteos y además propaga en vivo el evento `PollClosed` por SSE.
+
+### Pasos reproducibles
+
+1. **Estado base**: crear encuesta y emitir 1 voto inicial -> confirmar `GET http://127.0.0.1:4200/api/results/{pollId}` con `totalVotes = 1`.
+2. **Detener `results-service`**:
+
+   ```bash
+   docker compose stop results-service
+   ```
+
+3. **Verificar aislamiento y resiliencia durante la caída**:
+   - `GET http://127.0.0.1:4200/api/results/{pollId}` responde `503 Service Unavailable` desde el Circuit Breaker / fallback del Gateway.
+   - Emitir 3 votos nuevos por `POST http://127.0.0.1:4200/api/polls/{pollId}/votes` -> todos responden `201 Created`.
+   - Verificar colas directamente en RabbitMQ:
+
+     ```bash
+     docker compose exec -T rabbitmq rabbitmqctl list_queues -q name messages_ready messages_unacknowledged
+     ```
+
+     Esperado: `results.events.queue` acumula `3` mensajes listos (`ready=3`) y `results.events.dlq` permanece en `0`.
+
+4. **Reiniciar `results-service` y confirmar conciliación**:
+
+   ```bash
+   docker compose start results-service
+   ```
+
+   Esperar a `GET http://127.0.0.1:4200/api/results/{pollId}` con `totalVotes = 4` y verificar `results.events.dlq = 0`.
+
+5. **Verificar `PollClosed` en vivo por SSE** (mejora F9):
+   - Abrir stream `curl.exe -N -sS -i http://127.0.0.1:4200/api/results/{pollId}/stream` (recibe snapshot `status: "OPEN"`, `totalVotes: 4`).
+   - Cerrar encuesta (`POST http://127.0.0.1:4200/api/polls/{pollId}/close` con JWT del dueño -> `200`).
+   - Confirmar recepción inmediata de trama `event:results` en el mismo stream con `"status":"CLOSED"` y `closedAt` no nulo.
+
+### Evidencia verificada (F9)
+
+- Estado base: `totalVotes=1`.
+- Con `results-service` detenido:
+  - Lectura `GET /api/results/{pollId}`: HTTP `503`.
+  - 3 votos nuevos: `201,201,201`.
+  - `rabbitmqctl list_queues`: `results.events.queue ready=3 unacked=0`, `results.events.retry.queue ready=0`, `results.events.dlq ready=0`.
+- Tras `docker compose start results-service`:
+  - Conteo reconciliado automáticamente: `totalVotes=4` (`option1=3`, `option2=1`), `results.events.dlq=0`.
+- `PollClosed` en vivo por SSE:
+  - `POST .../close` -> HTTP `200`.
+  - Trama SSE recibida en el stream abierto: `event:results` con `"status":"CLOSED"`, `"totalVotes":4` y `"closedAt":"2026-11-27T22:47:22.484868011Z"`.
 
 ---
 

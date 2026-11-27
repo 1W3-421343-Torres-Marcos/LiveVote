@@ -62,4 +62,9 @@ public class PollProjectionEntity {
     public Instant getClosedAt() {
         return closedAt;
     }
+
+    public void close(Instant closedAt) {
+        this.status = PollProjectionStatus.CLOSED;
+        this.closedAt = closedAt;
+    }
 }

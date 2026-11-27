@@ -105,6 +105,37 @@ class ResultsEventConsumerTest {
         assertThat(meterRegistry.counter("livevote.events.consumed.total",
                 "routingKey", RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
                 "outcome", "duplicate").count()).isEqualTo(1.0d);
+
+        PollResultsResponse closedResponse = new PollResultsResponse(
+                UUID.fromString("550e8400-e29b-41d4-a716-446655440000"),
+                "Favorite DB?",
+                PollProjectionStatus.CLOSED,
+                1L,
+                updated.options(),
+                Instant.parse("2026-11-26T12:00:00Z"),
+                Instant.parse("2026-11-26T12:30:00Z")
+        );
+        when(projectionService.handlePollClosed(any(PollClosedEvent.class)))
+                .thenReturn(Optional.of(closedResponse))
+                .thenReturn(Optional.empty());
+
+        String pollClosedJson = """
+                {
+                  "eventVersion": 1,
+                  "pollId": "550e8400-e29b-41d4-a716-446655440000",
+                  "closedAt": "2026-11-26T12:30:00Z"
+                }
+                """;
+        consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED, pollClosedJson));
+        consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED, pollClosedJson));
+
+        verify(resultsStreamService).publishUpdate(closedResponse);
+        assertThat(meterRegistry.counter("livevote.events.consumed.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_POLL_CLOSED,
+                "outcome", "processed").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.counter("livevote.events.consumed.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_POLL_CLOSED,
+                "outcome", "duplicate").count()).isEqualTo(1.0d);
     }
 
     @Test
@@ -132,6 +163,16 @@ class ResultsEventConsumerTest {
                 }
                 """;
         assertThatThrownBy(() -> consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_VOTE_CAST, missingFieldsJson)))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+
+        String wrongCloseVersionJson = """
+                {
+                  "eventVersion": 2,
+                  "pollId": "550e8400-e29b-41d4-a716-446655440000",
+                  "closedAt": "2026-11-26T12:30:00Z"
+                }
+                """;
+        assertThatThrownBy(() -> consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED, wrongCloseVersionJson)))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
 
         assertThatThrownBy(() -> consumer.onMessage(buildMessage("unknown.key", "{}")))

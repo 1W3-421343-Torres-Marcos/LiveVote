@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.livevote.results.config.RabbitMqConfig;
 import com.livevote.results.dto.PollResultsResponse;
+import com.livevote.results.entity.PollProjectionStatus;
+import com.livevote.results.event.PollClosedEvent;
 import com.livevote.results.event.PollCreatedEvent;
 import com.livevote.results.event.PollCreatedOptionEvent;
 import com.livevote.results.event.VoteCastEvent;
@@ -209,7 +211,7 @@ class ResultsServiceIntegrationTest {
 
         List<PollResultsResponse> resultsEvents = new CopyOnWriteArrayList<>();
         AtomicInteger heartbeatCount = new AtomicInteger(0);
-        AtomicBoolean vote2Seen = new AtomicBoolean(false);
+        AtomicBoolean closedSeen = new AtomicBoolean(false);
         UUID vote1Id = UUID.randomUUID();
         UUID vote2Id = UUID.randomUUID();
 
@@ -219,8 +221,8 @@ class ResultsServiceIntegrationTest {
                         try {
                             PollResultsResponse parsed = objectMapper.readValue(event.data(), PollResultsResponse.class);
                             resultsEvents.add(parsed);
-                            if (parsed.totalVotes() == 2L) {
-                                vote2Seen.set(true);
+                            if (parsed.status() == PollProjectionStatus.CLOSED && parsed.closedAt() != null) {
+                                closedSeen.set(true);
                             }
                         } catch (Exception ex) {
                             throw new RuntimeException(ex);
@@ -229,7 +231,7 @@ class ResultsServiceIntegrationTest {
                         heartbeatCount.incrementAndGet();
                     }
                 })
-                .takeUntil(ignored -> vote2Seen.get() && heartbeatCount.get() >= 1);
+                .takeUntil(ignored -> closedSeen.get() && heartbeatCount.get() >= 1);
 
         StepVerifier.create(boundedStream)
                 .assertNext(first -> {
@@ -246,6 +248,11 @@ class ResultsServiceIntegrationTest {
                                 new VoteCastEvent(1, vote1Id, pollId, optionA, Instant.now()));
                         sendJson(RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
                                 new VoteCastEvent(1, vote2Id, pollId, optionB, Instant.now()));
+                        Instant closedAt = Instant.now();
+                        sendJson(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED,
+                                new PollClosedEvent(1, pollId, closedAt));
+                        sendJson(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED,
+                                new PollClosedEvent(1, pollId, closedAt));
                     } catch (Exception ex) {
                         throw new RuntimeException(ex);
                     }
@@ -253,7 +260,15 @@ class ResultsServiceIntegrationTest {
                 .thenConsumeWhile(ignored -> true)
                 .verifyComplete();
 
-        assertThat(resultsEvents).extracting(PollResultsResponse::totalVotes).containsExactly(0L, 1L, 2L);
+        assertThat(resultsEvents).extracting(PollResultsResponse::totalVotes).containsExactly(0L, 1L, 2L, 2L);
+        assertThat(resultsEvents).extracting(PollResultsResponse::status)
+                .containsExactly(
+                        PollProjectionStatus.OPEN,
+                        PollProjectionStatus.OPEN,
+                        PollProjectionStatus.OPEN,
+                        PollProjectionStatus.CLOSED
+                );
+        assertThat(resultsEvents.get(3).closedAt()).isNotNull();
         assertThat(heartbeatCount.get()).isGreaterThanOrEqualTo(1);
 
         awaitCondition(() -> resultsStreamService.activeSubscriberCount(pollId) == 0

@@ -32,6 +32,7 @@ class TraceIdFilterTest {
 
         assertThat(mdcInsideChain.get()).isEqualTo("trace-votes-abc");
         assertThat(response.getHeader(TraceIdFilter.HEADER_TRACE_ID)).isEqualTo("trace-votes-abc");
+        assertThat(response.getHeader(TraceIdFilter.HEADER_INSTANCE_ID)).isNotBlank();
         assertThat(MDC.get(TraceIdFilter.MDC_TRACE_ID)).isNull();
     }
 

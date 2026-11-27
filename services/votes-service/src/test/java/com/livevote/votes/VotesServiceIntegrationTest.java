@@ -231,6 +231,15 @@ class VotesServiceIntegrationTest {
             assertThat(closeResp.getBody().status()).isEqualTo(PollStatus.CLOSED);
             assertThat(closeResp.getBody().closedAt()).isNotNull();
 
+            Message pollClosedMsg = rabbitTemplate.receive(testQueueName, 5000);
+            assertThat(pollClosedMsg).isNotNull();
+            assertThat(pollClosedMsg.getMessageProperties().getReceivedRoutingKey())
+                    .isEqualTo(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED);
+            JsonNode pollClosedJson = objectMapper.readTree(pollClosedMsg.getBody());
+            assertThat(pollClosedJson.get("eventVersion").asInt()).isEqualTo(1);
+            assertThat(pollClosedJson.get("pollId").asText()).isEqualTo(createdPoll.id().toString());
+            assertThat(pollClosedJson.get("closedAt").asText()).isNotBlank();
+
             ResponseEntity<ApiErrorResponse> closedVoteResp = restTemplate.postForEntity(
                     "/api/polls/" + createdPoll.id() + "/votes",
                     new CastVoteRequest(chosenOptionId, UUID.randomUUID().toString()),

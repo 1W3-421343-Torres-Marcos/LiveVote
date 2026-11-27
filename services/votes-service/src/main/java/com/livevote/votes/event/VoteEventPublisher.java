@@ -51,6 +51,11 @@ public class VoteEventPublisher {
         publish(RabbitMqConfig.ROUTING_KEY_VOTE_CAST, event);
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPollClosed(PollClosedEvent event) {
+        publish(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED, event);
+    }
+
     private void publish(String routingKey, Object event) {
         try {
             byte[] payload = objectMapper.writeValueAsBytes(event);

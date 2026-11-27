@@ -82,6 +82,21 @@ public class ResultsEventConsumer {
                                     event.pollId(), event.voteId());
                         }
                     }
+                    case RabbitMqConfig.ROUTING_KEY_POLL_CLOSED -> {
+                        PollClosedEvent event = parse(message.getBody(), PollClosedEvent.class);
+                        validatePollClosed(event);
+                        Optional<PollResultsResponse> updated = projectionService.handlePollClosed(event);
+                        if (updated.isPresent()) {
+                            PollResultsResponse response = updated.get();
+                            resultsStreamService.publishUpdate(response);
+                            recordConsumedMetric(routingKey, "processed");
+                            log.info("Projected PollClosed pollId={} closedAt={}",
+                                    event.pollId(), event.closedAt());
+                        } else {
+                            recordConsumedMetric(routingKey, "duplicate");
+                            log.info("Ignored duplicate PollClosed pollId={}", event.pollId());
+                        }
+                    }
                     default -> throw new InvalidEventException("Unsupported routing key: " + routingKey);
                 }
             } catch (InvalidEventException ex) {
@@ -149,6 +164,15 @@ public class ResultsEventConsumer {
         }
         if (event.voteId() == null || event.pollId() == null || event.optionId() == null || event.castAt() == null) {
             throw new InvalidEventException("Missing required fields in VoteCast event");
+        }
+    }
+
+    private void validatePollClosed(PollClosedEvent event) {
+        if (event == null || !Integer.valueOf(SUPPORTED_EVENT_VERSION).equals(event.eventVersion())) {
+            throw new InvalidEventException("Unsupported or missing PollClosed eventVersion");
+        }
+        if (event.pollId() == null || event.closedAt() == null) {
+            throw new InvalidEventException("Missing required fields in PollClosed event");
         }
     }
 

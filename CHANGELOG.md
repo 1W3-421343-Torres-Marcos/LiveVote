@@ -4,6 +4,20 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-27
+
+### Agregado
+
+- Balanceo multi-réplica real en `api-gateway`: `UpstreamClientConfig` (`roundRobinSelection(true)`, `cacheMaxTimeToLive(5 s)`) junto a `spring.cloud.gateway.httpclient.pool.type: disabled` para evitar TCP keep-alive pinning al escalar `votes-service`.
+- Cabecera `X-Instance-Id` (`HOSTNAME`) y campo `instance=` en logs JSON de `TraceIdFilter` en `votes-service` para trazabilidad por réplica.
+- Evento `PollClosed` (`poll.closed`, `eventVersion: 1`) de extremo a extremo: emitido `AFTER_COMMIT` al cerrar una encuesta desde `PollService` / `VoteEventPublisher`, enlazado y consumido de forma idempotente en `results-service` (`ResultsProjectionService.handlePollClosed` + `ResultsEventConsumer`) y transmitido en caliente a los streams SSE abiertos.
+- Evidencia reproducible de **Demos (a)–(d)** y `PollClosed` SSE en [docs/demos.md](./docs/demos.md), evaluación de fan-out SSE y documentación final de portfolio en [README.md](./README.md) y [docs/plans/F9-final-demos-polish.md](./docs/plans/F9-final-demos-polish.md).
+
+### Cambiado
+
+- Alineación final de versiones a `1.0.0` en `services/votes-service/pom.xml`, `services/results-service/pom.xml`, `services/api-gateway/pom.xml`, `frontend/package.json` y `.env.prod.example`.
+- Actualización de `VotesServiceIntegrationTest`, `VoteEventPublisherTest`, `ResultsEventConsumerTest`, `ResultsServiceIntegrationTest`, `TraceIdFilterTest` y nuevo `UpstreamClientConfigTest` (`20/20` en `votes-service`, `19/19` en `results-service`, `14/14` en `api-gateway` y `14/14` en `frontend`).
+
 ## [0.8.0] - 2026-11-27
 
 ### Agregado

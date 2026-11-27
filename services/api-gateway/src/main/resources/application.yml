@@ -9,6 +9,8 @@ spring:
       httpclient:
         connect-timeout: 3000
         response-timeout: 6s
+        pool:
+          type: ${GATEWAY_HTTP_POOL_TYPE:disabled}
       routes:
         - id: votes-auth
           uri: ${app.upstream.votes-url}

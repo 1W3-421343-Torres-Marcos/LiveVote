@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F8` completada (`v0.8.0`) → **Siguiente**: `F9` (`Demos finales (a)–(d), documentación y mejoras opcionales`)
-- **Última verificación exitosa**: stack productivo `docker-compose.prod.yml` usando imágenes multi-arch reales de GHCR (`0.7.1`, `7/7 healthy`, solo `frontend` expuesto al host), `smoke-test.ps1` + `smoke-test.sh` (`9/9` checks incluyendo `401` ante `X-User-Id` falsificado y SSE), medición real `docker stats --no-stream` (`1143.28 MiB` totales / `1952 MiB` límite, pico `70.08 %`, cero `OOMKilled`) y `scripts/backup-postgres.sh` verificado con `pg_restore --list`.
+- **Fase actual**: `F9` completada (`v1.0.0`) — **Proyecto completado**
+- **Última verificación exitosa**: versión `1.0.0` verificada con `mvn -B verify` (`20/20` votes + `19/19` results + `14/14` gateway con Testcontainers) + `frontend` (`14/14` `test:ci` + `ng build` `352.65 kB`) + Compose `--scale votes-service=3` (`9/9` `healthy`): Demo (a) repartiendo tráfico entre las 3 réplicas (`X-Instance-Id`: `9`, `3`, `3`), Demo (b) con `3` eventos retenidos (`0` DLQ) y reconciliados a `totalVotes=4`, y entrega en vivo de `PollClosed` (`CLOSED` + `closedAt`) por SSE ([docs/demos.md](./demos.md)).
 
 ### Bitácora de hitos
 
@@ -22,14 +22,15 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F6** | 2026-11-27 | ✅ Completada (`v0.6.0`) | `mvn test` (`51/51`) + `npm test` (`14/14`) + Compose E2E (`7` `healthy`, Demos c y d en [docs/demos.md](./demos.md)) | Logs JSON + `traceId`, Actuator/Golden Signals, HikariCP + `503`, warmup AMQP F5 resuelto y runbook en `docs/demos.md` |
 | **F7** | 2026-11-27 | ✅ Completada (`v0.7.0`) | `mvn verify` (`51/51`) + `npm run test:ci`/`test`/`build` + `docker buildx` `amd64/arm64` (`4` imágenes) + Compose Distroless E2E + YAML check | Distroless `nonroot` (`JAVA_TOOL_OPTIONS`) + `HealthCheck.java` sin shell, builder `maven:3.9.9-eclipse-temurin-17-noble` (`$BUILDPLATFORM`) y 5 workflows GHCR sin `latest` (fix tag glob en `v0.7.1`) |
 | **F8** | 2026-11-27 | ✅ Completada (`v0.8.0`) | `docker compose -f docker-compose.yml -f docker-compose.prod.yml` con GHCR `0.7.1` + `smoke-test.ps1`/`.sh` (`9/9`) + `docker stats` (`1143.28 MiB`) + `backup-postgres.sh` | Validación productiva local (`~2 GB` RAM target, `mem_limit` calibrado y perfil opcional Caddy `tls`), `docs/runbook-prod.md` listo para desplegar en VPS |
+| **F9** | 2026-11-27 | ✅ Completada (`v1.0.0`) | `mvn verify` (`53/53`) + `npm test:ci`/`build` + Compose `--scale votes-service=3` (9 `healthy`, Demos a–b y `PollClosed` SSE) | Gateway DNS round-robin (`pool.type: disabled`) + `X-Instance-Id`, evento `poll.closed` en vivo por SSE, evaluación fan-out SSE y documentación final |
 
-### Mediciones y demos obligatorias (pendientes)
+### Mediciones y demos obligatorias (verificadas)
 
 - **Consumo real de RAM del stack** (`docker stats --no-stream`): ✅ **`1143.28 MiB`** medidos con imágenes Distroless reales bajo carga básica + SSE (`1952 MiB` límite base / `2016 MiB` con perfil `tls`; detalle por servicio en [docs/runbook-prod.md](./runbook-prod.md)).
-- **Demo (a)** Escalar `votes-service` (`--scale`) y verificar reparto real en Gateway: *pendiente (F9)*.
-- **Demo (b)** Detener `results-service`, votar y reiniciar sin pérdida de votos: *pendiente (F9)*.
-- **Demo (c)** Detener y recuperar `postgres-results`: ✅ verificada en F6 ([docs/demos.md](./demos.md)); validación final en F9.
-- **Demo (d)** Detener y recuperar `postgres-votes`: ✅ verificada en F6 ([docs/demos.md](./demos.md)); validación final en F9.
+- **Demo (a)** Escalar `votes-service` (`--scale`) y verificar reparto real en Gateway: ✅ verificada en F9 (`9`, `3` y `3` hits en las 3 réplicas vía `X-Instance-Id` y logs en [docs/demos.md](./demos.md)).
+- **Demo (b)** Detener `results-service`, votar y reiniciar sin pérdida de votos: ✅ verificada en F9 (`3` eventos retenidos, `0` DLQ, reconciliación a `totalVotes=4` + `PollClosed` SSE en [docs/demos.md](./demos.md)).
+- **Demo (c)** Detener y recuperar `postgres-results`: ✅ verificada en F6 y F9 ([docs/demos.md](./demos.md)).
+- **Demo (d)** Detener y recuperar `postgres-votes`: ✅ verificada en F6 y F9 ([docs/demos.md](./demos.md)).
 
 ---
 
@@ -150,9 +151,9 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: validación productiva local con imágenes GHCR (`0.7.1`) dentro de límites de RAM (`~2 GB`), perfil `tls` validado, backup `pg_dump` probado y smoke test (`9/9`) exitoso.
 
 ### F9 — Demos finales (a)–(d), documentación y mejoras opcionales
-- [ ] **Demo (a)**: escalar `votes-service` (`docker compose up --scale votes-service=3`), investigar/configurar el balanceo en `api-gateway` (evitando pinning por keep-alive de Netty) y probar distribución real entre réplicas.
-- [ ] **Demo (b)**: detener `results-service`, emitir votos, reiniciarlo y comprobar cero votos perdidos.
-- [ ] Documentar evidencia de las 4 demos **(a)**–**(d)** en `docs/PLAN.md` y `README.md`.
-- [ ] Completar `README.md` final con justificación de microservicios, trade-offs, consumo real de RAM medido y guía de uso/despliegue.
-- [ ] Evaluar/implementar mejoras opcionales: evento `PollClosed` en vivo y estrategia de fan-out SSE para escalar `results-service`.
-- [ ] **Verificación**: repositorio completo, reproducible con `docker compose up` y listo para evaluación y portfolio.
+- [x] **Demo (a)**: escalar `votes-service` (`docker compose up --scale votes-service=3`), investigar/configurar el balanceo en `api-gateway` (evitando pinning por keep-alive de Netty) y probar distribución real entre réplicas.
+- [x] **Demo (b)**: detener `results-service`, emitir votos, reiniciarlo y comprobar cero votos perdidos.
+- [x] Documentar evidencia de las 4 demos **(a)**–**(d)** en `docs/PLAN.md`, `docs/demos.md` y `README.md`.
+- [x] Completar `README.md` final con justificación de microservicios, trade-offs, consumo real de RAM medido y guía de uso/despliegue.
+- [x] Evaluar/implementar mejoras opcionales: evento `PollClosed` en vivo y estrategia de fan-out SSE para escalar `results-service`.
+- [x] **Verificación**: repositorio completo, reproducible con `docker compose up` y listo para evaluación y portfolio (`v1.0.0`).

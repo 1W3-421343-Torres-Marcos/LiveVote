@@ -44,6 +44,7 @@ public class RabbitMqConfig {
 
     public static final String ROUTING_KEY_POLL_CREATED = "poll.created";
     public static final String ROUTING_KEY_VOTE_CAST = "vote.cast";
+    public static final String ROUTING_KEY_POLL_CLOSED = "poll.closed";
 
     private static final String HEADER_PENDING_RETRIES = "x-pending-retries";
     private static final String HEADER_TRANSIENT_RETRIES = "x-transient-retries";
@@ -94,6 +95,11 @@ public class RabbitMqConfig {
     @Bean
     public Binding voteCastBinding(Queue resultsEventsQueue, TopicExchange livevoteEventsExchange) {
         return BindingBuilder.bind(resultsEventsQueue).to(livevoteEventsExchange).with(ROUTING_KEY_VOTE_CAST);
+    }
+
+    @Bean
+    public Binding pollClosedBinding(Queue resultsEventsQueue, TopicExchange livevoteEventsExchange) {
+        return BindingBuilder.bind(resultsEventsQueue).to(livevoteEventsExchange).with(ROUTING_KEY_POLL_CLOSED);
     }
 
     @Bean

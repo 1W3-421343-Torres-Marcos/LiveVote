@@ -21,6 +21,7 @@ public class RabbitMqConfig {
     public static final String EVENTS_EXCHANGE = "livevote.events";
     public static final String ROUTING_KEY_POLL_CREATED = "poll.created";
     public static final String ROUTING_KEY_VOTE_CAST = "vote.cast";
+    public static final String ROUTING_KEY_POLL_CLOSED = "poll.closed";
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqConfig.class);
 

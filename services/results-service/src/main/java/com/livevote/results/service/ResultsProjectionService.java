@@ -5,6 +5,7 @@ import com.livevote.results.dto.PollResultsResponse;
 import com.livevote.results.entity.OptionCountEntity;
 import com.livevote.results.entity.PollProjectionEntity;
 import com.livevote.results.entity.PollProjectionStatus;
+import com.livevote.results.event.PollClosedEvent;
 import com.livevote.results.event.PollCreatedEvent;
 import com.livevote.results.event.PollCreatedOptionEvent;
 import com.livevote.results.event.VoteCastEvent;
@@ -95,6 +96,21 @@ public class ResultsProjectionService {
         if (updated == 0) {
             throw new InvalidEventException("Option not found in poll projection: optionId=" + event.optionId());
         }
+        return Optional.of(getResults(event.pollId()));
+    }
+
+    @Transactional
+    public Optional<PollResultsResponse> handlePollClosed(PollClosedEvent event) {
+        PollProjectionEntity poll = pollProjectionRepository.findById(event.pollId())
+                .orElseThrow(() -> new PollProjectionPendingException("Poll projection not found yet for pollId=" + event.pollId()));
+
+        if (poll.getStatus() == PollProjectionStatus.CLOSED) {
+            log.debug("Ignoring duplicate PollClosed pollId={}", event.pollId());
+            return Optional.empty();
+        }
+
+        poll.close(event.closedAt());
+        pollProjectionRepository.save(poll);
         return Optional.of(getResults(event.pollId()));
     }
 

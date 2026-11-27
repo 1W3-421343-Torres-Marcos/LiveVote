@@ -114,4 +114,36 @@ class VoteEventPublisherTest {
         assertThat(json.get("optionId").asText()).isEqualTo(optionId.toString());
         assertThat(json.get("castAt").asText()).isEqualTo("2026-11-26T12:05:00Z");
     }
+
+    @Test
+    void onPollClosedShouldSendVersionedJsonPayloadWithTraceId() throws Exception {
+        UUID pollId = UUID.randomUUID();
+        PollClosedEvent event = new PollClosedEvent(1, pollId, Instant.parse("2026-11-26T12:30:00Z"));
+
+        MDC.put(TraceIdFilter.MDC_TRACE_ID, "trace-close-99");
+        try {
+            publisher.onPollClosed(event);
+        } finally {
+            MDC.remove(TraceIdFilter.MDC_TRACE_ID);
+        }
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(
+                eq(RabbitMqConfig.EVENTS_EXCHANGE),
+                eq(RabbitMqConfig.ROUTING_KEY_POLL_CLOSED),
+                messageCaptor.capture()
+        );
+
+        Message sent = messageCaptor.getValue();
+        assertThat(sent.getMessageProperties().getHeaders()).doesNotContainKey("__TypeId__");
+        assertThat(sent.getMessageProperties().getHeaders()).containsEntry(TraceIdFilter.HEADER_TRACE_ID, "trace-close-99");
+        assertThat(meterRegistry.counter("livevote.events.published.total",
+                "routingKey", RabbitMqConfig.ROUTING_KEY_POLL_CLOSED,
+                "outcome", "success").count()).isEqualTo(1.0d);
+
+        JsonNode json = objectMapper.readTree(sent.getBody());
+        assertThat(json.get("eventVersion").asInt()).isEqualTo(1);
+        assertThat(json.get("pollId").asText()).isEqualTo(pollId.toString());
+        assertThat(json.get("closedAt").asText()).isEqualTo("2026-11-26T12:30:00Z");
+    }
 }

@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -17,16 +19,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Extracts or generates X-Trace-Id, populates SLF4J MDC for JSON logs, and cleans up after each request.
+ * Extracts or generates X-Trace-Id, populates SLF4J MDC for JSON logs, exposes X-Instance-Id, and cleans up after each request.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER_TRACE_ID = "X-Trace-Id";
+    public static final String HEADER_INSTANCE_ID = "X-Instance-Id";
     public static final String MDC_TRACE_ID = "traceId";
 
     private static final Pattern VALID_TRACE_ID = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
+    private static final String INSTANCE_ID = resolveInstanceId();
     private static final Logger log = LoggerFactory.getLogger(TraceIdFilter.class);
 
     @Override
@@ -39,6 +43,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
         String traceId = resolveOrGenerateTraceId(request.getHeader(HEADER_TRACE_ID));
         MDC.put(MDC_TRACE_ID, traceId);
         response.setHeader(HEADER_TRACE_ID, traceId);
+        response.setHeader(HEADER_INSTANCE_ID, INSTANCE_ID);
 
         try {
             filterChain.doFilter(request, response);
@@ -46,14 +51,30 @@ public class TraceIdFilter extends OncePerRequestFilter {
             long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
             String path = request.getRequestURI();
             if (path.startsWith("/actuator/")) {
-                log.debug("HTTP request completed method={} path={} status={} durationMs={}",
-                        request.getMethod(), path, response.getStatus(), durationMs);
+                log.debug("HTTP request completed method={} path={} status={} durationMs={} instance={}",
+                        request.getMethod(), path, response.getStatus(), durationMs, INSTANCE_ID);
             } else {
-                log.info("HTTP request completed method={} path={} status={} durationMs={}",
-                        request.getMethod(), path, response.getStatus(), durationMs);
+                log.info("HTTP request completed method={} path={} status={} durationMs={} instance={}",
+                        request.getMethod(), path, response.getStatus(), durationMs, INSTANCE_ID);
             }
             MDC.remove(MDC_TRACE_ID);
         }
+    }
+
+    private static String resolveInstanceId() {
+        String envHost = System.getenv("HOSTNAME");
+        if (envHost != null && !envHost.isBlank()) {
+            return envHost.trim();
+        }
+        try {
+            String hostName = InetAddress.getLocalHost().getHostName();
+            if (hostName != null && !hostName.isBlank()) {
+                return hostName.trim();
+            }
+        } catch (UnknownHostException ignored) {
+            // Fall back to static local identifier when hostname resolution is unavailable.
+        }
+        return "votes-local";
     }
 
     private String resolveOrGenerateTraceId(String incoming) {
