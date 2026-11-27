@@ -114,14 +114,21 @@ class ResultsProjectionServiceTest {
         UUID optionId = UUID.randomUUID();
         UUID voteId = UUID.randomUUID();
         VoteCastEvent event = new VoteCastEvent(1, voteId, pollId, optionId, Instant.now());
+        PollProjectionEntity projection = new PollProjectionEntity(pollId, "Favorite?", PollProjectionStatus.OPEN, Instant.now());
+        OptionCountEntity updatedOption = new OptionCountEntity(optionId, pollId, "A", 0, 1L);
 
         when(pollProjectionRepository.existsById(pollId)).thenReturn(true);
         when(processedVoteRepository.insertIgnoreDuplicate(any(), any(), any())).thenReturn(1, 0);
         when(optionCountRepository.incrementVoteCount(optionId, pollId)).thenReturn(1);
+        when(pollProjectionRepository.findById(pollId)).thenReturn(Optional.of(projection));
+        when(optionCountRepository.findAllByPollIdOrderByDisplayOrderAsc(pollId)).thenReturn(List.of(updatedOption));
 
-        service.handleVoteCast(event);
-        service.handleVoteCast(event);
+        Optional<PollResultsResponse> firstResult = service.handleVoteCast(event);
+        Optional<PollResultsResponse> duplicateResult = service.handleVoteCast(event);
 
+        assertThat(firstResult).isPresent();
+        assertThat(firstResult.get().totalVotes()).isEqualTo(1L);
+        assertThat(duplicateResult).isEmpty();
         verify(optionCountRepository).incrementVoteCount(optionId, pollId);
     }
 

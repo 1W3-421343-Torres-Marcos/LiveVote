@@ -17,6 +17,7 @@ import com.livevote.results.repository.ProcessedVoteRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class ResultsProjectionService {
     }
 
     @Transactional
-    public void handleVoteCast(VoteCastEvent event) {
+    public Optional<PollResultsResponse> handleVoteCast(VoteCastEvent event) {
         if (!pollProjectionRepository.existsById(event.pollId())) {
             throw new PollProjectionPendingException("Poll projection not found yet for pollId=" + event.pollId());
         }
@@ -87,13 +88,14 @@ public class ResultsProjectionService {
         );
         if (inserted == 0) {
             log.debug("Ignoring duplicate VoteCast voteId={}", event.voteId());
-            return;
+            return Optional.empty();
         }
 
         int updated = optionCountRepository.incrementVoteCount(event.optionId(), event.pollId());
         if (updated == 0) {
             throw new InvalidEventException("Option not found in poll projection: optionId=" + event.optionId());
         }
+        return Optional.of(getResults(event.pollId()));
     }
 
     @Transactional(readOnly = true)

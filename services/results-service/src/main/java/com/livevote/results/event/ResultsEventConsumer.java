@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.livevote.results.config.RabbitMqConfig;
 import com.livevote.results.exception.InvalidEventException;
 import com.livevote.results.service.ResultsProjectionService;
+import com.livevote.results.service.ResultsStreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
@@ -23,10 +24,16 @@ public class ResultsEventConsumer {
 
     private final ObjectMapper objectMapper;
     private final ResultsProjectionService projectionService;
+    private final ResultsStreamService resultsStreamService;
 
-    public ResultsEventConsumer(ObjectMapper objectMapper, ResultsProjectionService projectionService) {
+    public ResultsEventConsumer(
+            ObjectMapper objectMapper,
+            ResultsProjectionService projectionService,
+            ResultsStreamService resultsStreamService
+    ) {
         this.objectMapper = objectMapper;
         this.projectionService = projectionService;
+        this.resultsStreamService = resultsStreamService;
     }
 
     @RabbitListener(queues = RabbitMqConfig.EVENTS_QUEUE, containerFactory = "rabbitListenerContainerFactory")
@@ -46,7 +53,8 @@ public class ResultsEventConsumer {
                 case RabbitMqConfig.ROUTING_KEY_VOTE_CAST -> {
                     VoteCastEvent event = parse(message.getBody(), VoteCastEvent.class);
                     validateVoteCast(event);
-                    projectionService.handleVoteCast(event);
+                    projectionService.handleVoteCast(event)
+                            .ifPresent(resultsStreamService::publishUpdate);
                 }
                 default -> throw new InvalidEventException("Unsupported routing key: " + routingKey);
             }

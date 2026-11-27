@@ -2,13 +2,23 @@ package com.livevote.results.event;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.livevote.results.config.RabbitMqConfig;
+import com.livevote.results.dto.OptionResultResponse;
+import com.livevote.results.dto.PollResultsResponse;
+import com.livevote.results.entity.PollProjectionStatus;
 import com.livevote.results.service.ResultsProjectionService;
+import com.livevote.results.service.ResultsStreamService;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,17 +33,19 @@ class ResultsEventConsumerTest {
 
     @Mock
     private ResultsProjectionService projectionService;
+    @Mock
+    private ResultsStreamService resultsStreamService;
 
     private ResultsEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        consumer = new ResultsEventConsumer(objectMapper, projectionService);
+        consumer = new ResultsEventConsumer(objectMapper, projectionService, resultsStreamService);
     }
 
     @Test
-    void shouldRouteValidPollCreatedAndVoteCastPayloads() {
+    void shouldRouteValidPollCreatedAndVoteCastPayloadsAndPublishOnlyNewVotes() {
         String pollCreatedJson = """
                 {
                   "eventVersion": 1,
@@ -48,6 +60,24 @@ class ResultsEventConsumerTest {
         consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_POLL_CREATED, pollCreatedJson));
         verify(projectionService).handlePollCreated(any(PollCreatedEvent.class));
 
+        PollResultsResponse updated = new PollResultsResponse(
+                UUID.fromString("550e8400-e29b-41d4-a716-446655440000"),
+                "Favorite DB?",
+                PollProjectionStatus.OPEN,
+                1L,
+                List.of(new OptionResultResponse(
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        "PostgreSQL",
+                        0,
+                        1L
+                )),
+                Instant.parse("2026-11-26T12:00:00Z"),
+                null
+        );
+        when(projectionService.handleVoteCast(any(VoteCastEvent.class)))
+                .thenReturn(Optional.of(updated))
+                .thenReturn(Optional.empty());
+
         String voteCastJson = """
                 {
                   "eventVersion": 1,
@@ -58,7 +88,10 @@ class ResultsEventConsumerTest {
                 }
                 """;
         consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_VOTE_CAST, voteCastJson));
-        verify(projectionService).handleVoteCast(any(VoteCastEvent.class));
+        consumer.onMessage(buildMessage(RabbitMqConfig.ROUTING_KEY_VOTE_CAST, voteCastJson));
+
+        verify(resultsStreamService).publishUpdate(updated);
+        verify(resultsStreamService, never()).publishUpdate(null);
     }
 
     @Test

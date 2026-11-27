@@ -15,7 +15,7 @@ public interface OptionCountRepository extends JpaRepository<OptionCountEntity, 
 
     List<OptionCountEntity> findAllByPollIdOrderByDisplayOrderAsc(UUID pollId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE OptionCountEntity o
             SET o.voteCount = o.voteCount + 1

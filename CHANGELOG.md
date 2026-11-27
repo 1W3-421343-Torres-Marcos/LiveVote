@@ -4,6 +4,21 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
+### Agregado
+
+- Endpoint SSE `GET /api/results/{id}/stream` (`text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`) en `services/results-service` mediante `ResultsStreamService` (`Sinks.Many` por encuesta, `Schedulers.boundedElastic()` para snapshot inicial con `retry: 3000`, actualizaciones en vivo tras commit y evento `heartbeat` cada ~20 s vía `SseProperties` y `HeartbeatEvent`).
+- Buffer acotado previo a la consulta JPA en `ResultsStreamService` para retener votos concurrentes durante la carga del snapshot inicial sin emitir duplicados ni fugas de memoria (`onErrorResume` + `doFinally`).
+- Test de integración `SseGatewayStreamingTest` en `services/api-gateway` con servidor Netty embebido demostrando entrega SSE continua más allá del timeout HTTP global (`400 ms`), stripping de `X-User-Id` y preservación del fallback `503` en rutas REST.
+- Pruebas unitarias (`ResultsStreamServiceTest`) e integración Testcontainers en `ResultsServiceIntegrationTest` (`19/19` en `results-service`, `11/11` en `api-gateway`, `17/17` en `votes-service`).
+
+### Cambiado
+
+- `OptionCountRepository.incrementVoteCount` actualizado con `@Modifying(flushAutomatically = true, clearAutomatically = true)` y `ResultsProjectionService.handleVoteCast` pasando a retornar `Optional<PollResultsResponse>` (vacío ante votos duplicados) para emitir al stream únicamente votos nuevos confirmados desde `ResultsEventConsumer`.
+- `GlobalExceptionHandler` en `results-service` configurando `MediaType.APPLICATION_JSON` explícito en errores (`404`/`400`) incluso ante peticiones con `Accept: text/event-stream`.
+- Ajuste explícito de `connect-timeout: 3000` junto a `response-timeout: -1` en la ruta `results-stream` de `services/api-gateway`, y alineación de versiones Maven a `0.4.0` en los 3 servicios.
+
 ## [0.3.0] - 2026-11-27
 
 ### Agregado

@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F3` completada (`v0.3.0`) → **Siguiente**: `F4` (`Tiempo real: SSE con heartbeat`)
-- **Última verificación exitosa**: `api-gateway` (`9/9` tests en verde con WireMock) + `votes-service` (`17/17`) + `results-service` (`11/11`) con Testcontainers, `docker compose config` y `docker compose up -d --build` (6 contenedores `healthy`) con smoke test HTTP end-to-end por `http://localhost:8080` (`X-User-Id` spoofing `401`, registro/encuesta/voto `201`, duplicado `409`, rate limit `429` y fallback `503`).
+- **Fase actual**: `F4` completada (`v0.4.0`) → **Siguiente**: `F5` (`Frontend Angular y nginx`)
+- **Última verificación exitosa**: `results-service` (`19/19` tests en verde con Testcontainers PostgreSQL + RabbitMQ) + `api-gateway` (`11/11` con `SseGatewayStreamingTest` y WireMock) + `votes-service` (`17/17`), `docker compose config` y `docker compose up -d --build` (6 contenedores `healthy`) con verificación `curl -N` end-to-end por `http://localhost:8080/api/results/{id}/stream` (snapshot `176 ms`, voto `201` en vivo `237 ms`, duplicado `409` sin evento extra, `heartbeat` a los `~20 s`, `> 22 s` sin corte y `404` JSON).
 
 ### Bitácora de hitos
 
@@ -17,6 +17,7 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F1** | 2026-11-26 | ✅ Completada (`v0.1.0`) | `mvn test` (`14/14`, Testcontainers `postgres:16.6-alpine`) + `docker compose up -d --build` + smoke HTTP | `votes-service` aislado + `postgres-votes` + Flyway V1 listos; Testcontainers fijado en `1.21.4` por Docker Engine 29 |
 | **F2** | 2026-11-26 | ✅ Completada (`v0.2.0`) | `mvn test` (`17/17` votes + `11/11` results, Testcontainers Postgres+RabbitMQ) + Compose E2E (5 contenedores) | Refactor previo a *Package by Layer* (`82a2497`); RabbitMQ `AFTER_COMMIT`, idempotencia atómica y DLQ verificados |
 | **F3** | 2026-11-27 | ✅ Completada (`v0.3.0`) | `mvn test` (`9/9` gateway + `17/17` votes + `11/11` results) + Compose E2E (6 contenedores) | Gateway único en `:8080`, JWT/`X-User-Id`, Caffeine `429`, Resilience4j `503` y puertos `8081`/`8082` internos |
+| **F4** | 2026-11-27 | ✅ Completada (`v0.4.0`) | `mvn test` (`19/19` results + `11/11` gateway + `17/17` votes) + `curl -N` E2E (`> 22 s`) | SSE con snapshot, updates en vivo, `heartbeat` `~20 s`, limpieza sin fugas (`onErrorResume` + `doFinally`) y `response-timeout: -1` |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -112,9 +113,9 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: tests unitarios/integración de filtros JWT, stripping de `X-User-Id`, `429` y Circuit Breaker; enviar `X-User-Id` falsificado sin JWT devuelve `401`.
 
 ### F4 — Tiempo real (SSE con heartbeat)
-- [ ] Implementar `GET /api/results/{id}/stream` en `results-service` con `Flux` y `Sinks.Many` (snapshot inicial + actualizaciones en vivo + evento `heartbeat` cada ~20 s + limpieza al cancelar).
-- [ ] Ajustar timeouts / Circuit Breaker en `api-gateway` para no cortar streams SSE prolongados.
-- [ ] **Verificación**: `curl -N` a través de `api-gateway` recibe snapshot inmediato, delta instantáneo al emitir un voto y heartbeats cada ~20 s sin desconexión.
+- [x] Implementar `GET /api/results/{id}/stream` en `results-service` con `Flux` y `Sinks.Many` (snapshot inicial + actualizaciones en vivo + evento `heartbeat` cada ~20 s + limpieza al cancelar).
+- [x] Ajustar timeouts / Circuit Breaker en `api-gateway` para no cortar streams SSE prolongados.
+- [x] **Verificación**: `curl -N` a través de `api-gateway` recibe snapshot inmediato, delta instantáneo al emitir un voto y heartbeats cada ~20 s sin desconexión.
 
 ### F5 — Frontend Angular y `nginx`
 - [ ] Crear aplicación Angular moderna en `frontend/` (standalone, sin `NgModules`, `@if`/`@for` con `track`, guards funcionales e interceptor JWT funcional).

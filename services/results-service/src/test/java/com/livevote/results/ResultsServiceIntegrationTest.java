@@ -8,12 +8,17 @@ import com.livevote.results.dto.PollResultsResponse;
 import com.livevote.results.event.PollCreatedEvent;
 import com.livevote.results.event.PollCreatedOptionEvent;
 import com.livevote.results.event.VoteCastEvent;
+import com.livevote.results.service.ResultsStreamService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
@@ -24,19 +29,25 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import org.springframework.test.web.reactive.server.FluxExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "app.messaging.retry-delay-ms=200",
                 "app.messaging.local-retry-initial-ms=50",
-                "app.messaging.local-retry-max-attempts=2"
+                "app.messaging.local-retry-max-attempts=2",
+                "app.sse.heartbeat-interval-ms=600"
         }
 )
 @Testcontainers
@@ -58,6 +69,9 @@ class ResultsServiceIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ResultsStreamService resultsStreamService;
 
     @Test
     void shouldProjectEventsIdempotentlyRetryOutOfOrderAndRoutePoisonMessagesToDlq() throws Exception {
@@ -140,6 +154,97 @@ class ResultsServiceIntegrationTest {
                 .value(body -> assertThat(body).containsEntry("status", "UP"));
     }
 
+    @Test
+    void shouldStreamSnapshotLiveUpdatesHeartbeatAndCleanUpOnCancel() throws Exception {
+        UUID pollId = UUID.randomUUID();
+        UUID optionA = UUID.randomUUID();
+        UUID optionB = UUID.randomUUID();
+        sendJson(RabbitMqConfig.ROUTING_KEY_POLL_CREATED, new PollCreatedEvent(
+                1,
+                pollId,
+                "Live SSE Integration Poll",
+                List.of(
+                        new PollCreatedOptionEvent(optionA, "Alpha"),
+                        new PollCreatedOptionEvent(optionB, "Beta")
+                ),
+                Instant.now()
+        ));
+
+        awaitResults(pollId, r -> r != null && r.totalVotes() == 0L);
+
+        WebTestClient sseClient = webTestClient.mutate()
+                .responseTimeout(Duration.ofSeconds(10))
+                .build();
+
+        FluxExchangeResult<ServerSentEvent<String>> streamResult = sseClient.get()
+                .uri("/api/results/{id}/stream", pollId)
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectHeader().valueEquals("X-Accel-Buffering", "no")
+                .returnResult(new ParameterizedTypeReference<ServerSentEvent<String>>() {});
+
+        List<PollResultsResponse> resultsEvents = new CopyOnWriteArrayList<>();
+        AtomicInteger heartbeatCount = new AtomicInteger(0);
+        AtomicBoolean vote2Seen = new AtomicBoolean(false);
+        UUID vote1Id = UUID.randomUUID();
+        UUID vote2Id = UUID.randomUUID();
+
+        Flux<ServerSentEvent<String>> boundedStream = streamResult.getResponseBody()
+                .doOnNext(event -> {
+                    if ("results".equals(event.event()) && event.data() != null) {
+                        try {
+                            PollResultsResponse parsed = objectMapper.readValue(event.data(), PollResultsResponse.class);
+                            resultsEvents.add(parsed);
+                            if (parsed.totalVotes() == 2L) {
+                                vote2Seen.set(true);
+                            }
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    } else if ("heartbeat".equals(event.event())) {
+                        heartbeatCount.incrementAndGet();
+                    }
+                })
+                .takeUntil(ignored -> vote2Seen.get() && heartbeatCount.get() >= 1);
+
+        StepVerifier.create(boundedStream)
+                .assertNext(first -> {
+                    assertThat(first.event()).isEqualTo("results");
+                    assertThat(first.retry()).isEqualTo(Duration.ofSeconds(3));
+                    assertThat(resultsEvents).hasSize(1);
+                    assertThat(resultsEvents.get(0).totalVotes()).isZero();
+                })
+                .then(() -> {
+                    try {
+                        sendJson(RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
+                                new VoteCastEvent(1, vote1Id, pollId, optionA, Instant.now()));
+                        sendJson(RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
+                                new VoteCastEvent(1, vote1Id, pollId, optionA, Instant.now()));
+                        sendJson(RabbitMqConfig.ROUTING_KEY_VOTE_CAST,
+                                new VoteCastEvent(1, vote2Id, pollId, optionB, Instant.now()));
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                })
+                .thenConsumeWhile(ignored -> true)
+                .verifyComplete();
+
+        assertThat(resultsEvents).extracting(PollResultsResponse::totalVotes).containsExactly(0L, 1L, 2L);
+        assertThat(heartbeatCount.get()).isGreaterThanOrEqualTo(1);
+
+        awaitCondition(() -> resultsStreamService.activeSubscriberCount(pollId) == 0
+                && resultsStreamService.activePollChannelCount() == 0);
+
+        webTestClient.get()
+                .uri("/api/results/{id}/stream", UUID.randomUUID())
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON);
+    }
+
     private void sendJson(String routingKey, Object payload) throws Exception {
         byte[] bytes = objectMapper.writeValueAsBytes(payload);
         Message message = MessageBuilder.withBody(bytes)
@@ -174,5 +279,16 @@ class ResultsServiceIntegrationTest {
             Thread.sleep(75);
         }
         throw new AssertionError("Timed out waiting for poll results condition for pollId=" + pollId + ", latest=" + latest);
+    }
+
+    private void awaitCondition(BooleanSupplier condition) throws InterruptedException {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+        while (Instant.now().isBefore(deadline)) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("Timed out waiting for condition");
     }
 }

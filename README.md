@@ -95,8 +95,8 @@ docker compose up --build
 | **F1** | `votes-service` aislado + `postgres-votes` + Flyway + Compose inicial | ✅ Completada (`v0.1.0`) |
 | **F2** | RabbitMQ + `results-service` + idempotencia + DLQ | ✅ Completada (`v0.2.0`) |
 | **F3** | `api-gateway` (JWT, `X-User-Id`, rate limit, Circuit Breaker) | ✅ Completada (`v0.3.0`) |
-| **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ⏳ Siguiente |
-| **F5** | Frontend Angular standalone + `nginx` | ⬜ Pendiente |
+| **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ✅ Completada (`v0.4.0`) |
+| **F5** | Frontend Angular standalone + `nginx` | ⏳ Siguiente |
 | **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ⬜ Pendiente |
 | **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ⬜ Pendiente |
 | **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⬜ Pendiente |
