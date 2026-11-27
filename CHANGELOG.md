@@ -4,6 +4,22 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-27
+
+### Agregado
+
+- Probe HTTP mínimo e independiente `HealthCheck.java` (solo `java.base`, `HttpURLConnection`, timeouts de `3 s` y flag `--print`) en `services/votes-service`, `services/results-service` y `services/api-gateway` para healthchecks e inspección sin shell dentro de Distroless.
+- Configuración Karma CI en `frontend/karma.conf.js` (`ChromeHeadlessCI` con `--no-sandbox`, `--disable-gpu`, `--disable-dev-shm-usage`) y script `npm run test:ci` en `frontend/package.json`.
+- Cinco workflows en `.github/workflows/` (`votes-service.yml`, `results-service.yml`, `api-gateway.yml`, `frontend.yml` filtrados por `paths` + `release.yml` en tags semánticos `v*.*.*`) con permisos mínimos, ejecución de `mvn -B verify` / `npm run test:ci` + `ng build`, y publicación multi-arquitectura (`linux/amd64,linux/arm64`) en `ghcr.io/<owner>/livevote-<component>` sin tag `latest` (`sha-<short>`, `X.Y.Z`, `X.Y`).
+- Documentación de diseño y aprendizajes en [docs/plans/F7-distroless-ci-cd.md](./docs/plans/F7-distroless-ci-cd.md).
+
+### Cambiado
+
+- Migración de `services/votes-service/Dockerfile`, `services/results-service/Dockerfile` y `services/api-gateway/Dockerfile` a multi-stage `FROM --platform=$BUILDPLATFORM maven:3.9.9-eclipse-temurin-17-noble` → `FROM gcr.io/distroless/java17-debian12:nonroot` (`USER nonroot:nonroot`, etiquetas OCI y `ENTRYPOINT ["java", "-jar", "/app/app.jar"]` con soporte nativo de `JAVA_TOOL_OPTIONS`).
+- Actualización de `frontend/Dockerfile` a `--platform=$BUILDPLATFORM node:22.12.0-alpine3.20` → `nginx:1.27.3-alpine` con etiquetas OCI.
+- Healthchecks Java en `docker-compose.yml` y comandos internos de [docs/demos.md](./docs/demos.md) actualizados al probe `HealthCheck` sin shell/`wget`.
+- Alineación de versiones a `0.7.0` en `services/votes-service/pom.xml`, `services/results-service/pom.xml`, `services/api-gateway/pom.xml`, `frontend/package.json` y `.env.prod.example` (`APP_VERSION=0.7.0` y nota `JAVA_TOOL_OPTIONS`).
+
 ## [0.6.0] - 2026-11-27
 
 ### Agregado

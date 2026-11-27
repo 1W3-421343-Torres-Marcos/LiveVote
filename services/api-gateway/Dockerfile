@@ -1,20 +1,26 @@
-FROM maven:3.9.9-eclipse-temurin-17-alpine AS build
+# syntax=docker/dockerfile:1
+
+FROM --platform=$BUILDPLATFORM maven:3.9.9-eclipse-temurin-17-noble AS build
 WORKDIR /workspace
 
 COPY pom.xml .
 RUN mvn -B dependency:go-offline
 
 COPY src ./src
-RUN mvn -B package -DskipTests
+COPY HealthCheck.java .
+RUN mvn -B package -DskipTests && javac --release 17 -d /workspace/healthcheck HealthCheck.java
 
-FROM eclipse-temurin:17.0.14_7-jre-alpine
+FROM gcr.io/distroless/java17-debian12:nonroot
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S -G app app
-COPY --from=build /workspace/target/api-gateway-*.jar /app/app.jar
-RUN chown app:app /app/app.jar
+LABEL org.opencontainers.image.title="livevote-api-gateway" \
+      org.opencontainers.image.description="LiveVote API Gateway with JWT, IP rate limiting, and Resilience4j" \
+      org.opencontainers.image.source="https://github.com/1W3-421343-Torres-Marcos/LiveVote"
 
-USER app
+COPY --from=build --chown=65532:65532 /workspace/target/api-gateway-*.jar /app/app.jar
+COPY --from=build --chown=65532:65532 /workspace/healthcheck/HealthCheck.class /app/HealthCheck.class
+
+USER nonroot:nonroot
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

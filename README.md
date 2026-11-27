@@ -100,6 +100,6 @@ docker compose up --build
 | **F4** | Tiempo real SSE con heartbeat (~20 s) end-to-end | ✅ Completada (`v0.4.0`) |
 | **F5** | Frontend Angular standalone + `nginx` | ✅ Completada (`v0.5.0`) |
 | **F6** | Observabilidad (`traceId`, JSON logs, Actuator) + demos (c) y (d) | ✅ Completada (`v0.6.0`) |
-| **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ⏳ Siguiente |
-| **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⬜ Pendiente |
+| **F7** | Imágenes Distroless multi-arch (`amd64`/`arm64`) + CI/CD | ✅ Completada (`v0.7.0`) |
+| **F8** | Producción (`docker-compose.prod.yml`, RAM, TLS, backups, smoke test) | ⏳ Siguiente |
 | **F9** | Demos (a)–(d) documentadas, README final y mejoras opcionales | ⬜ Pendiente |

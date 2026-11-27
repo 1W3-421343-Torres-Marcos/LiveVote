@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F6` completada (`v0.6.0`) → **Siguiente**: `F7` (`Imágenes Distroless multi-arquitectura y CI/CD`)
-- **Última verificación exitosa**: backend `0.6.0` (`13/13` gateway + `19/19` votes + `19/19` results con Testcontainers) + `frontend` (`14/14` tests Jasmine/Karma en `ChromeHeadless` + `ng build` `352.65 kB`) + `docker compose up -d` (`7` contenedores `healthy`: arranque en frío `201`, logs JSON con `traceId`, Golden Signals, Demo c y Demo d documentadas en [docs/demos.md](./demos.md)).
+- **Fase actual**: `F7` completada (`v0.7.0`) → **Siguiente**: `F8` (`Producción y medición real de RAM`)
+- **Última verificación exitosa**: backend `0.7.0` (`mvn -B verify`: `19/19` votes + `19/19` results + `13/13` gateway) + `frontend` (`14/14` `test:ci` `ChromeHeadlessCI` + `14/14` `test` + `ng build` `352.65 kB`) + `docker buildx build --platform linux/amd64,linux/arm64` en las 4 imágenes (`amd64` + `aarch64`, `nonroot`, sin `/bin/sh`, `JAVA_TOOL_OPTIONS`) + `docker compose up -d --build` (`7` `healthy`, `HealthCheck --print` `200`, smoke E2E y snapshot SSE) + 5 workflows YAML validados (`LF`, sin `latest`).
 
 ### Bitácora de hitos
 
@@ -20,6 +20,7 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F4** | 2026-11-27 | ✅ Completada (`v0.4.0`) | `mvn test` (`19/19` results + `11/11` gateway + `17/17` votes) + `curl -N` E2E (`> 22 s`) | SSE con snapshot, updates en vivo, `heartbeat` `~20 s`, limpieza sin fugas (`onErrorResume` + `doFinally`) y `response-timeout: -1` |
 | **F5** | 2026-11-27 | ✅ Completada (`v0.5.0`) | `npm test` (`14/14`) + `npm run build` + `mvn test` (`47/47`) + Compose E2E (`nginx` SSE + navegador) | SPA Angular 20 LTS + `nginx` en `:4200`; hallazgo en frío (`TimeLimiter 4 s` vs lazy `RabbitTemplate`) anotado para F6 |
 | **F6** | 2026-11-27 | ✅ Completada (`v0.6.0`) | `mvn test` (`51/51`) + `npm test` (`14/14`) + Compose E2E (`7` `healthy`, Demos c y d en [docs/demos.md](./demos.md)) | Logs JSON + `traceId`, Actuator/Golden Signals, HikariCP + `503`, warmup AMQP F5 resuelto y runbook en `docs/demos.md` |
+| **F7** | 2026-11-27 | ✅ Completada (`v0.7.0`) | `mvn verify` (`51/51`) + `npm run test:ci`/`test`/`build` + `docker buildx` `amd64/arm64` (`4` imágenes) + Compose Distroless E2E + YAML check | Distroless `nonroot` (`JAVA_TOOL_OPTIONS`) + `HealthCheck.java` sin shell, builder `maven:3.9.9-eclipse-temurin-17-noble` (`$BUILDPLATFORM`) y 5 workflows GHCR sin `latest` |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -134,9 +135,9 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación — Demo (d)**: detener `postgres-votes`, confirmar lectura/SSE en `results-service` y error controlado al votar/crear, reiniciar y verificar autorrecuperación.
 
 ### F7 — Imágenes Distroless multi-arquitectura y CI/CD
-- [ ] Crear Dockerfiles multi-stage Distroless (`gcr.io/distroless/java17-debian12:nonroot` y `nginx` con tag fijo, cero `latest`) compatibles con `linux/amd64` y `linux/arm64`.
-- [ ] Crear workflows en `.github/workflows/` disparados por ruta modificada (`services/*`, `frontend`) con build, tests + Testcontainers y publicación multi-arch con versionado semántico.
-- [ ] **Verificación**: build local multi-arch con `docker buildx` exitoso; workflows YAML validados.
+- [x] Crear Dockerfiles multi-stage Distroless (`gcr.io/distroless/java17-debian12:nonroot` y `nginx` con tag fijo, cero `latest`) compatibles con `linux/amd64` y `linux/arm64`.
+- [x] Crear workflows en `.github/workflows/` disparados por ruta modificada (`services/*`, `frontend`) con build, tests + Testcontainers y publicación multi-arch con versionado semántico.
+- [x] **Verificación**: build local multi-arch con `docker buildx` exitoso; workflows YAML validados.
 
 ### F8 — Producción y medición real de RAM
 > **Compuerta obligatoria previa**: ANTES de planificar o ejecutar F8, preguntar al usuario el destino de despliegue y verificar los límites vigentes de su plan gratuito.

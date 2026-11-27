@@ -1,0 +1,23 @@
+name: Release — Multi-Arch Images
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  votes-service:
+    uses: ./.github/workflows/votes-service.yml
+
+  results-service:
+    uses: ./.github/workflows/results-service.yml
+
+  api-gateway:
+    uses: ./.github/workflows/api-gateway.yml
+
+  frontend:
+    uses: ./.github/workflows/frontend.yml

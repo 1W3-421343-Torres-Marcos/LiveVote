@@ -27,6 +27,7 @@ Guía reproducible para ejecutar las demostraciones de resiliencia y observabili
    | `postgres-votes` / `postgres-results` | `localhost:5433` / `localhost:5434` | `postgres-votes:5432` / `postgres-results:5432` |
 
 3. Nota PowerShell (`5.1` en Windows): al usar `curl` para SSE usar siempre `curl.exe` (evita el alias `Invoke-WebRequest`), con `-N` para desactivar buffering.
+4. Contenedores Distroless (sin shell ni `wget`): los microservicios Java incluyen el probe `HealthCheck` compilado en `/app`; para consultar endpoints internos de Actuator ejecutar `docker compose exec -T <servicio> java -Xmx24m -XX:TieredStopAtLevel=1 -cp /app HealthCheck --print <url>`.
 
 ---
 
@@ -55,12 +56,12 @@ Demuestra que la caída de la base de proyecciones (`postgres-results`) no bloqu
    docker compose stop postgres-results
    ```
 
-3. **Verificar aislamiento de salud** (probes internos):
+3. **Verificar aislamiento de salud** (probes internos sin shell en Distroless):
 
    ```bash
-   docker compose exec -T results-service sh -c "wget -q -S -O - http://127.0.0.1:8082/actuator/health/readiness 2>&1 || true"
-   docker compose exec -T results-service sh -c "wget -q -O - http://127.0.0.1:8082/actuator/health/liveness"
-   docker compose exec -T votes-service sh -c "wget -q -O - http://127.0.0.1:8081/actuator/health/readiness"
+   docker compose exec -T results-service java -Xmx24m -XX:TieredStopAtLevel=1 -cp /app HealthCheck --print http://127.0.0.1:8082/actuator/health/readiness
+   docker compose exec -T results-service java -Xmx24m -XX:TieredStopAtLevel=1 -cp /app HealthCheck --print http://127.0.0.1:8082/actuator/health/liveness
+   docker compose exec -T votes-service java -Xmx24m -XX:TieredStopAtLevel=1 -cp /app HealthCheck --print http://127.0.0.1:8081/actuator/health/readiness
    ```
 
    Esperado: `results-service` pasa `/actuator/health/readiness` a `503` (`db` en `DOWN`, `rabbit` en `UP`), manteniendo `/actuator/health/liveness` en `200`, mientras `votes-service` sigue `200 UP`.
