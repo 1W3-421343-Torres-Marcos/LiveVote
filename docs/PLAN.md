@@ -6,8 +6,8 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 
 ## Estado actual y bitácora
 
-- **Fase actual**: `F2` completada (`v0.2.0`) → **Siguiente**: `F3` (`api-gateway` y red interna)
-- **Última verificación exitosa**: `votes-service` (`17/17` tests en verde) + `results-service` (`11/11` tests en verde) con Testcontainers (`postgres:16.6-alpine` + `rabbitmq:3.13.7-alpine`), `docker compose config` y `docker compose up -d --build` (5 contenedores `healthy`) con smoke test HTTP end-to-end (`readiness` `200`, encuesta proyectada `0 -> 1` voto, duplicado `409`).
+- **Fase actual**: `F3` completada (`v0.3.0`) → **Siguiente**: `F4` (`Tiempo real: SSE con heartbeat`)
+- **Última verificación exitosa**: `api-gateway` (`9/9` tests en verde con WireMock) + `votes-service` (`17/17`) + `results-service` (`11/11`) con Testcontainers, `docker compose config` y `docker compose up -d --build` (6 contenedores `healthy`) con smoke test HTTP end-to-end por `http://localhost:8080` (`X-User-Id` spoofing `401`, registro/encuesta/voto `201`, duplicado `409`, rate limit `429` y fallback `503`).
 
 ### Bitácora de hitos
 
@@ -16,6 +16,7 @@ Roadmap técnico por fases (**F0–F9**) para construir **LiveVote** de principi
 | **F0** | 2026-11-22 | ✅ Completada | `git status -u` + validación de `AGENTS.md` y 9 skills | Base del monorepo, reglas, contratos y bitácora listos |
 | **F1** | 2026-11-26 | ✅ Completada (`v0.1.0`) | `mvn test` (`14/14`, Testcontainers `postgres:16.6-alpine`) + `docker compose up -d --build` + smoke HTTP | `votes-service` aislado + `postgres-votes` + Flyway V1 listos; Testcontainers fijado en `1.21.4` por Docker Engine 29 |
 | **F2** | 2026-11-26 | ✅ Completada (`v0.2.0`) | `mvn test` (`17/17` votes + `11/11` results, Testcontainers Postgres+RabbitMQ) + Compose E2E (5 contenedores) | Refactor previo a *Package by Layer* (`82a2497`); RabbitMQ `AFTER_COMMIT`, idempotencia atómica y DLQ verificados |
+| **F3** | 2026-11-27 | ✅ Completada (`v0.3.0`) | `mvn test` (`9/9` gateway + `17/17` votes + `11/11` results) + Compose E2E (6 contenedores) | Gateway único en `:8080`, JWT/`X-User-Id`, Caffeine `429`, Resilience4j `503` y puertos `8081`/`8082` internos |
 
 ### Mediciones y demos obligatorias (pendientes)
 
@@ -103,12 +104,12 @@ Exchange topic durable `livevote.events` + Dead Letter Exchange `livevote.dlx` -
 - [x] **Verificación**: tests unitarios + Testcontainers (PostgreSQL y RabbitMQ) pasando; un voto en `votes-service` actualiza `postgres-results`; evento duplicado no altera conteos; payload corrupto termina en `results.events.dlq`.
 
 ### F3 — `api-gateway` y red interna
-- [ ] Crear proyecto `services/api-gateway` (Spring Cloud Gateway + Resilience4j + validación JWT HS256).
-- [ ] Configurar enrutamiento (`/api/auth/**`, `/api/polls/**`, `/api/votes/**` -> `votes-service`; `/api/results/**` -> `results-service`).
-- [ ] Implementar sanitización global que elimina cualquier `X-User-Id` entrante y la reinyecta desde el `sub` del JWT solo en rutas protegidas.
-- [ ] Implementar rate limiting por IP en registro, login y voto, más Circuit Breaker con fallback controlado por ruta.
-- [ ] Aislar servicios internos en Compose con `app.security.trust-gateway-header=true` en `votes-service`.
-- [ ] **Verificación**: tests unitarios/integración de filtros JWT, stripping de `X-User-Id`, `429` y Circuit Breaker; enviar `X-User-Id` falsificado sin JWT devuelve `401`.
+- [x] Crear proyecto `services/api-gateway` (Spring Cloud Gateway + Resilience4j + validación JWT HS256).
+- [x] Configurar enrutamiento (`/api/auth/**`, `/api/polls/**`, `/api/votes/**` -> `votes-service`; `/api/results/**` -> `results-service`).
+- [x] Implementar sanitización global que elimina cualquier `X-User-Id` entrante y la reinyecta desde el `sub` del JWT solo en rutas protegidas.
+- [x] Implementar rate limiting por IP en registro, login y voto, más Circuit Breaker con fallback controlado por ruta.
+- [x] Aislar servicios internos en Compose con `app.security.trust-gateway-header=true` en `votes-service`.
+- [x] **Verificación**: tests unitarios/integración de filtros JWT, stripping de `X-User-Id`, `429` y Circuit Breaker; enviar `X-User-Id` falsificado sin JWT devuelve `401`.
 
 ### F4 — Tiempo real (SSE con heartbeat)
 - [ ] Implementar `GET /api/results/{id}/stream` en `results-service` con `Flux` y `Sinks.Many` (snapshot inicial + actualizaciones en vivo + evento `heartbeat` cada ~20 s + limpieza al cancelar).

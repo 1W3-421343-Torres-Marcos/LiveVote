@@ -74,7 +74,7 @@ services:
       RABBITMQ_VHOST: ${RABBITMQ_VHOST}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS}
-      TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER}
+      TRUST_GATEWAY_HEADER: "true"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
     depends_on:
       postgres-votes:
@@ -113,6 +113,29 @@ services:
       - livevote-internal
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8082/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    environment:
+      SERVER_PORT: 8080
+      VOTES_SERVICE_URL: http://votes-service:8081
+      RESULTS_SERVICE_URL: http://results-service:8082
+      JWT_SECRET: ${JWT_SECRET}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+    depends_on:
+      votes-service:
+        condition: service_healthy
+      results-service:
+        condition: service_healthy
+    networks:
+      - livevote-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

@@ -4,6 +4,22 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
+### Agregado
+
+- Nuevo microservicio `services/api-gateway` (Spring Cloud Gateway WebFlux, Java 17, estructura *Package by Layer*: `config`, `security`, `controller`, `exception`, versión `0.3.0`) con `Dockerfile` multi-stage Distroless multi-arquitectura.
+- Enrutamiento unificado en el Gateway para `votes-auth`, `votes-polls`, `results-stream` (`/api/results/*/stream` sin Circuit Breaker ni timeout restrictivo para SSE) y `results-api`.
+- Filtro global `IdentityHeaderFilter`: elimina cualquier cabecera `X-User-Id` enviada por el cliente, valida JWT HS256 en rutas protegidas (`POST/PATCH /api/polls/**`, `GET /api/polls/mine`) y reinyecta `X-User-Id` con el claim `sub` del token.
+- Filtro `IpRateLimitFilter` con Caffeine en memoria (registro `5 req/min`, login `10 req/min`, voto `30 req/min`) respondiendo `429 Too Many Requests` en formato `ApiErrorResponse` estándar.
+- Circuit Breakers con Resilience4j (`votes-cb`, `results-cb`) registrando fallos en HTTP `500/502/503/504` y `FallbackController` (`503 Service Unavailable` preservando el `path` original de la solicitud).
+- Suite de tests unitarios e integración con WireMock en `api-gateway` (`9/9` en verde).
+
+### Cambiado
+
+- Alineación de versiones Maven a `0.3.0` en `services/api-gateway`, `services/votes-service` y `services/results-service`.
+- Aislamiento de red interna en `docker-compose.yml` y `docker-compose.override.yml`: `api-gateway` expuesto en `http://localhost:8080`, `TRUST_GATEWAY_HEADER: "true"` activo en `votes-service` y retiro de los puertos `8081`/`8082` publicados al host.
+
 ## [0.2.0] - 2026-11-26
 
 ### Cambiado

@@ -35,10 +35,7 @@ services:
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-production-minimum-32-bytes}
       JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-7200}
-      TRUST_GATEWAY_HEADER: ${TRUST_GATEWAY_HEADER:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-    ports:
-      - "8081:8081"
 
   results-service:
     environment:
@@ -49,5 +46,10 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-livevote_dev_password}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+
+  api-gateway:
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-production-minimum-32-bytes}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     ports:
-      - "8082:8082"
+      - "8080:8080"
