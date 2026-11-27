@@ -4,6 +4,13 @@ Todos los cambios relevantes de **LiveVote** se documentan en este archivo sigui
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-27
+
+### Corregido
+
+- Corrección del filtro de tags en `.github/workflows/release.yml` a sintaxis glob SemVer (`v[0-9]*.[0-9]*.[0-9]*`) para disparar publicaciones multi-arch al pushear tags de versión.
+- Actualización de `actions/setup-java@v4` a `@v5` y reintentos HTTP Maven Central (`-Daether.transport.http.retryHandler.count=5`) en los workflows de `votes-service`, `results-service` y `api-gateway` ante respuestas transitorias `429`.
+
 ## [0.7.0] - 2026-11-27
 
 ### Agregado
